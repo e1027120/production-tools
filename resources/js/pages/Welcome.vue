@@ -2,14 +2,13 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { dashboard, login, register } from '@/routes';
 import { 
-    Database, 
-    Terminal, 
-    Clock, 
-    Lock, 
     ArrowRight, 
     Activity, 
     ShieldCheck, 
-    Server 
+    Network,
+    Layers,
+    GraduationCap,
+    Users
 } from '@lucide/vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 </script>
@@ -66,15 +65,15 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
                 <div class="lg:col-span-7 flex flex-col space-y-6">
                     <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 w-fit text-xs font-semibold uppercase tracking-wider">
                         <Activity class="size-4 animate-pulse" />
-                        Live Operations Multi-Tool Platform
+                        Church Production Multi-Tool Platform
                     </div>
 
                     <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] text-foreground">
-                        Everything you need to keep production running <span class="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">flawlessly</span>.
+                        Everything you need to run church production <span class="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">flawlessly</span>.
                     </h1>
 
                     <p class="text-base sm:text-lg text-muted-foreground max-w-xl leading-relaxed">
-                        A centralized operation platform designed for developers. Monitor app performance, run safe database analysis, manage cron schedules, and keep secrets secure—all under one dashboard.
+                        A centralized operations platform designed specifically for church production teams. Design technical schematics, organize gear racks, switch between campuses, and train your AV volunteers—all under one unified dashboard.
                     </p>
 
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4">
@@ -96,11 +95,11 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
                     <div class="flex items-center gap-6 pt-6 text-sm text-muted-foreground border-t border-border/40">
                         <div class="flex items-center gap-2">
                             <ShieldCheck class="size-5 text-primary" />
-                            <span>Sqlite Database</span>
+                            <span>Secure Workspaces</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <Server class="size-5 text-secondary" />
-                            <span>Modular Infrastructure</span>
+                            <Layers class="size-5 text-secondary" />
+                            <span>Modular Production Suite</span>
                         </div>
                     </div>
                 </div>
@@ -118,7 +117,7 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
                                 <span class="size-3 rounded-full bg-yellow-400"></span>
                                 <span class="size-3 rounded-full bg-green-400"></span>
                             </div>
-                            <span class="text-xs font-mono text-muted-foreground/80 font-medium">ops-terminal v1.3</span>
+                            <span class="text-xs font-mono text-muted-foreground/80 font-medium">production-console v2.1</span>
                         </div>
 
                         <!-- Mini terminal console representation -->
@@ -145,16 +144,16 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
                                     <span>STATUS</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span>Database Explorer</span>
+                                    <span>Technical Diagrammer</span>
                                     <span class="text-primary">ONLINE</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span>Real-time Log Stream</span>
+                                    <span>Equipment Rack Builder</span>
                                     <span class="text-primary">ONLINE</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span>Cron Scheduler</span>
-                                    <span class="text-primary">STANDBY</span>
+                                    <span>Volunteer LMS & Portal</span>
+                                    <span class="text-primary">ONLINE</span>
                                 </div>
                             </div>
                         </div>
@@ -174,55 +173,55 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <!-- Feature 1: Database Explorer -->
+                    <!-- Feature 1: Technical Diagrams -->
                     <div class="group relative bg-white/70 dark:bg-card/60 border border-border/50 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-300 backdrop-blur">
                         <div class="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
-                            <Database class="size-6" />
+                            <Network class="size-6" />
                         </div>
                         <h3 class="font-semibold text-lg text-foreground group-hover:text-primary transition-colors">
-                            Database Explorer
+                            Technical Diagrams
                         </h3>
                         <p class="text-muted-foreground text-sm mt-2 leading-relaxed">
-                            Analyze database schema, execute secure, read-only SQL queries, and download snapshots instantly.
+                            Design stage plots and routing. Define connection ports, custom cable paths, and edit waypoints dynamically.
                         </p>
                     </div>
 
-                    <!-- Feature 2: Log Streamer -->
+                    <!-- Feature 2: Equipment Racks -->
                     <div class="group relative bg-white/70 dark:bg-card/60 border border-border/50 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-300 backdrop-blur">
                         <div class="size-12 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
-                            <Terminal class="size-6" />
+                            <Layers class="size-6" />
                         </div>
                         <h3 class="font-semibold text-lg text-foreground group-hover:text-secondary transition-colors">
-                            Live Log Streamer
+                            Equipment Rack Builder
                         </h3>
                         <p class="text-muted-foreground text-sm mt-2 leading-relaxed">
-                            Aggregate real-time web server logs, application exceptions, and background task output.
+                            Construct server and AV equipment racks. Arrange rack units visually for seamless control room organization.
                         </p>
                     </div>
 
-                    <!-- Feature 3: Task Scheduler -->
+                    <!-- Feature 3: Volunteer Training -->
                     <div class="group relative bg-white/70 dark:bg-card/60 border border-border/50 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-300 backdrop-blur">
                         <div class="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
-                            <Clock class="size-6" />
+                            <GraduationCap class="size-6" />
                         </div>
                         <h3 class="font-semibold text-lg text-foreground group-hover:text-primary transition-colors">
-                            Cron Scheduler
+                            Volunteer Training
                         </h3>
                         <p class="text-muted-foreground text-sm mt-2 leading-relaxed">
-                            Monitor scheduled cron jobs, verify execution history, trigger tasks manually, and set alerts.
+                            Onboard team members with multi-step courses (audio, video, text) and verify knowledge with custom builder tests.
                         </p>
                     </div>
 
-                    <!-- Feature 4: Secret Vault -->
+                    <!-- Feature 4: Multi-Church Workspaces -->
                     <div class="group relative bg-white/70 dark:bg-card/60 border border-border/50 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-300 backdrop-blur">
                         <div class="size-12 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
-                            <Lock class="size-6" />
+                            <Users class="size-6" />
                         </div>
                         <h3 class="font-semibold text-lg text-foreground group-hover:text-secondary transition-colors">
-                            Secrets Vault
+                            Multi-Church Workspaces
                         </h3>
                         <p class="text-muted-foreground text-sm mt-2 leading-relaxed">
-                            View and edit environment configurations securely. Fully encrypted and audits all key changes.
+                            Isolate and manage configurations for different campuses, assign volunteer permissions, and audit logs.
                         </p>
                     </div>
                 </div>
