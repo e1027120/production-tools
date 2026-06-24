@@ -48,12 +48,6 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
                     >
                         Log in
                     </Link>
-                    <Link
-                        :href="register()"
-                        class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-md hover:bg-primary/95 transition-all duration-200 hover:shadow-primary/10 hover:shadow-lg"
-                    >
-                        Get Started
-                    </Link>
                 </template>
             </nav>
         </header>
@@ -77,13 +71,6 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
                     </p>
 
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4">
-                        <Link
-                            :href="$page.props.auth.user ? dashboard() : register()"
-                            class="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3.5 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/15 hover:bg-primary/95 hover:shadow-xl hover:shadow-primary/20 transition-all duration-200"
-                        >
-                            {{ $page.props.auth.user ? 'Go to Dashboard' : 'Create Free Account' }}
-                            <ArrowRight class="ml-2 size-5" />
-                        </Link>
                         <a
                             href="#features"
                             class="inline-flex items-center justify-center rounded-xl border border-border/80 bg-white/60 dark:bg-card/40 backdrop-blur px-6 py-3.5 text-base font-semibold hover:bg-white dark:hover:bg-card hover:border-border transition-all duration-200"
