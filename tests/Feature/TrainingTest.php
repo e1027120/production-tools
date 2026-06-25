@@ -1,26 +1,23 @@
 <?php
 
-use App\Models\User;
 use App\Models\Church;
 use App\Models\Training;
-use App\Models\TrainingStep;
-use App\Models\TestQuestion;
-use App\Models\QuestionOption;
 use App\Models\TrainingAssignment;
 use App\Models\TrainingAttempt;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 test('users without trainings module access are blocked', function () {
     $user = User::factory()->create();
     $church = Church::create(['name' => 'First Church']);
-    
+
     // User role with NO trainings module
     $church->users()->attach($user->id, [
         'role' => 'User',
         'modules' => ['racks'], // only racks
     ]);
-    
+
     $user->update(['current_church_id' => $church->id]);
     $this->actingAs($user);
 
@@ -31,13 +28,13 @@ test('users without trainings module access are blocked', function () {
 test('admins and managers have training index access automatically', function () {
     $user = User::factory()->create();
     $church = Church::create(['name' => 'First Church']);
-    
+
     // Manager role
     $church->users()->attach($user->id, [
         'role' => 'Manager',
         'modules' => [], // empty modules, but manager gets implicit access
     ]);
-    
+
     $user->update(['current_church_id' => $church->id]);
     $this->actingAs($user);
 
@@ -70,7 +67,7 @@ test('admins and managers can create a training with steps and questions', funct
                 'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
                 'image_file' => $image,
                 'audio_file' => $audio,
-            ]
+            ],
         ],
         'questions' => [
             [
@@ -79,9 +76,9 @@ test('admins and managers can create a training with steps and questions', funct
                 'options' => [
                     ['option_text' => 'Turn on power', 'is_correct' => true],
                     ['option_text' => 'Turn off power', 'is_correct' => false],
-                ]
-            ]
-        ]
+                ],
+            ],
+        ],
     ]);
 
     $response->assertRedirect(route('trainings.index'));
@@ -117,8 +114,8 @@ test('non-managers cannot create trainings', function () {
         'has_test' => false,
         'passing_score' => 80,
         'steps' => [
-            ['title' => 'Only step', 'content' => 'content']
-        ]
+            ['title' => 'Only step', 'content' => 'content'],
+        ],
     ]);
 
     $response->assertStatus(403);
@@ -129,10 +126,10 @@ test('admins can assign training and users can play and submit answers', functio
     $admin = User::factory()->create();
     $member = User::factory()->create();
     $church = Church::create(['name' => 'First Church']);
-    
+
     $church->users()->attach($admin->id, ['role' => 'Admin']);
     $church->users()->attach($member->id, ['role' => 'User', 'modules' => ['trainings']]);
-    
+
     $admin->update(['current_church_id' => $church->id]);
     $member->update(['current_church_id' => $church->id]);
 
@@ -178,7 +175,7 @@ test('admins can assign training and users can play and submit answers', functio
     $response = $this->post(route('trainings.submit', $training), [
         'answers' => [
             $question->id => $correctOption->id,
-        ]
+        ],
     ]);
     $response->assertRedirect(route('trainings.index'));
 
@@ -194,9 +191,9 @@ test('admins can assign training and users can play and submit answers', functio
     $response = $this->post(route('trainings.submit', $training), [
         'answers' => [
             $question->id => $wrongOption->id,
-        ]
+        ],
     ]);
-    
+
     $assignment->refresh();
     expect($assignment->status)->toBe('failed');
     expect(TrainingAttempt::where('training_id', $training->id)->where('user_id', $member->id)->count())->toBe(2);
@@ -206,10 +203,10 @@ test('users can complete a training that has no test', function () {
     $admin = User::factory()->create();
     $member = User::factory()->create();
     $church = Church::create(['name' => 'First Church']);
-    
+
     $church->users()->attach($admin->id, ['role' => 'Admin']);
     $church->users()->attach($member->id, ['role' => 'User', 'modules' => ['trainings']]);
-    
+
     $admin->update(['current_church_id' => $church->id]);
     $member->update(['current_church_id' => $church->id]);
 
@@ -239,7 +236,7 @@ test('users can complete a training that has no test', function () {
     // Member completes training
     $this->actingAs($member);
     $response = $this->post(route('trainings.submit', $training), [
-        'answers' => [] // empty answers submitted
+        'answers' => [], // empty answers submitted
     ]);
 
     $response->assertRedirect(route('trainings.index'));
@@ -257,10 +254,10 @@ test('re-assigning a training resets previous attempts and sets status to pendin
     $admin = User::factory()->create();
     $member = User::factory()->create();
     $church = Church::create(['name' => 'First Church']);
-    
+
     $church->users()->attach($admin->id, ['role' => 'Admin']);
     $church->users()->attach($member->id, ['role' => 'User', 'modules' => ['trainings']]);
-    
+
     $admin->update(['current_church_id' => $church->id]);
     $member->update(['current_church_id' => $church->id]);
 
@@ -287,7 +284,7 @@ test('re-assigning a training resets previous attempts and sets status to pendin
     // Member completes first time
     $this->actingAs($member);
     $this->post(route('trainings.submit', $training), [
-        'answers' => []
+        'answers' => [],
     ]);
 
     // Verify first attempt completed
@@ -308,4 +305,92 @@ test('re-assigning a training resets previous attempts and sets status to pendin
     expect(TrainingAttempt::where('training_id', $training->id)->where('user_id', $member->id)->count())->toBe(0);
 });
 
+test('admins can create a user manual and it automatically generates a share token', function () {
+    $user = User::factory()->create();
+    $church = Church::create(['name' => 'First Church']);
+    $church->users()->attach($user->id, ['role' => 'Admin']);
+    $user->update(['current_church_id' => $church->id]);
+    $this->actingAs($user);
 
+    $response = $this->post(route('trainings.store'), [
+        'type' => 'user_manual',
+        'title' => 'Video Switcher Manual',
+        'description' => 'Instructions for Blackmagic ATEM',
+        'ministry' => 'Video',
+        'has_test' => false,
+        'passing_score' => 80,
+        'steps' => [
+            [
+                'title' => 'Step 1: Check inputs',
+                'content' => '<p>Inspect SDI cables</p>',
+            ],
+        ],
+    ]);
+
+    $response->assertRedirect(route('trainings.index'));
+
+    $manual = Training::where('title', 'Video Switcher Manual')->first();
+    expect($manual)->not->toBeNull();
+    expect($manual->type)->toBe('user_manual');
+    expect($manual->share_token)->not->toBeNull();
+    expect($manual->has_test)->toBeFalse();
+});
+
+test('admins can toggle public sharing on user manuals', function () {
+    $admin = User::factory()->create();
+    $church = Church::create(['name' => 'First Church']);
+    $church->users()->attach($admin->id, ['role' => 'Admin']);
+    $admin->update(['current_church_id' => $church->id]);
+
+    $manual = Training::create([
+        'church_id' => $church->id,
+        'type' => 'user_manual',
+        'title' => 'Projection Manual',
+        'has_test' => false,
+        'passing_score' => 80,
+        'share_token' => 'custom-token-123',
+        'created_by' => $admin->id,
+    ]);
+
+    $this->actingAs($admin);
+
+    // Toggle off (removes token)
+    $response = $this->post(route('trainings.toggle-share', $manual));
+    $response->assertRedirect();
+    $manual->refresh();
+    expect($manual->share_token)->toBeNull();
+
+    // Toggle on (adds token)
+    $response = $this->post(route('trainings.toggle-share', $manual));
+    $response->assertRedirect();
+    $manual->refresh();
+    expect($manual->share_token)->not->toBeNull();
+    expect(strlen($manual->share_token))->toBe(32);
+});
+
+test('guests can view public simplified checklist using share token without login', function () {
+    $admin = User::factory()->create();
+    $church = Church::create(['name' => 'First Church']);
+    $church->users()->attach($admin->id, ['role' => 'Admin']);
+
+    $manual = Training::create([
+        'church_id' => $church->id,
+        'type' => 'user_manual',
+        'title' => 'Lighting Desk Setup',
+        'has_test' => false,
+        'passing_score' => 80,
+        'share_token' => 'public-share-token-xyz-987',
+        'created_by' => $admin->id,
+    ]);
+
+    $manual->steps()->create([
+        'title' => 'Fader Calibration',
+        'content' => 'Fader instructions text',
+    ]);
+
+    // View as guest (no actingAs)
+    $response = $this->get(route('trainings.shared.view', 'public-share-token-xyz-987'));
+    $response->assertOk();
+    $response->assertSee('Lighting Desk Setup');
+    $response->assertSee('Fader Calibration');
+});

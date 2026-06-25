@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Training;
-use App\Models\TrainingStep;
-use App\Models\TestQuestion;
 use App\Models\QuestionOption;
+use App\Models\TestQuestion;
+use App\Models\Training;
 use App\Models\TrainingAssignment;
 use App\Models\TrainingAttempt;
+use App\Models\TrainingStep;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -78,12 +78,27 @@ class TrainingController extends Controller
             $trainings = Training::where('church_id', $churchId)
                 ->withCount(['steps', 'assignments', 'attempts'])
                 ->orderBy('id', 'desc')
-                ->get();
+                ->get()
+                ->map(function ($t) {
+                    return [
+                        'id' => $t->id,
+                        'type' => $t->type,
+                        'title' => $t->title,
+                        'description' => $t->description,
+                        'ministry' => $t->ministry,
+                        'has_test' => $t->has_test,
+                        'passing_score' => $t->passing_score,
+                        'steps_count' => $t->steps_count,
+                        'assignments_count' => $t->assignments_count,
+                        'attempts_count' => $t->attempts_count,
+                        'share_token' => $t->share_token,
+                    ];
+                });
 
             $churchMembers = $user->currentChurch->users()
                 ->orderBy('name')
                 ->get()
-                ->map(fn($m) => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email]);
+                ->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'email' => $m->email]);
 
             $reports = TrainingAttempt::whereHas('training', function ($q) use ($churchId) {
                 $q->where('church_id', $churchId);
@@ -105,8 +120,25 @@ class TrainingController extends Controller
                 });
         }
 
+        $userManuals = Training::where('church_id', $churchId)
+            ->where('type', 'user_manual')
+            ->withCount('steps')
+            ->orderBy('title')
+            ->get()
+            ->map(function ($manual) {
+                return [
+                    'id' => $manual->id,
+                    'title' => $manual->title,
+                    'description' => $manual->description,
+                    'ministry' => $manual->ministry,
+                    'steps_count' => $manual->steps_count,
+                    'share_token' => $manual->share_token,
+                ];
+            });
+
         return Inertia::render('trainings/Index', [
             'trainings' => $trainings,
+            'userManuals' => $userManuals,
             'assignments' => $assignments,
             'myHistory' => $myHistory,
             'churchMembers' => $churchMembers,
@@ -141,6 +173,7 @@ class TrainingController extends Controller
         }
 
         $validated = $request->validate([
+            'type' => ['nullable', 'string', 'in:training,user_manual'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'ministry' => ['nullable', 'string', 'max:255'],
@@ -152,7 +185,7 @@ class TrainingController extends Controller
             'steps.*.video_url' => ['nullable', 'string', 'url', 'max:255'],
             'steps.*.image_file' => ['nullable', 'file', 'image', 'max:5120'],
             'steps.*.audio_file' => ['nullable', 'file', 'mimes:mp3,wav,ogg,m4a,aac', 'max:15360'],
-            
+
             // test questions
             'questions' => ['nullable', 'array'],
             'questions.*.question_text' => ['required', 'string'],
@@ -165,14 +198,21 @@ class TrainingController extends Controller
         ]);
 
         DB::transaction(function () use ($user, $validated, $request) {
+            $type = $validated['type'] ?? 'training';
+            $hasTest = $type === 'user_manual' ? false : $validated['has_test'];
+            $passingScore = $type === 'user_manual' ? 80 : $validated['passing_score'];
+            $shareToken = $type === 'user_manual' ? Str::random(32) : null;
+
             // 1. Create Training
             $training = Training::create([
                 'church_id' => $user->current_church_id,
+                'type' => $type,
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
                 'ministry' => $validated['ministry'] ?? null,
-                'has_test' => $validated['has_test'],
-                'passing_score' => $validated['passing_score'],
+                'has_test' => $hasTest,
+                'passing_score' => $passingScore,
+                'share_token' => $shareToken,
                 'created_by' => $user->id,
             ]);
 
@@ -200,7 +240,7 @@ class TrainingController extends Controller
             }
 
             // 3. Create test questions
-            if ($validated['has_test'] && !empty($validated['questions'])) {
+            if ($validated['has_test'] && ! empty($validated['questions'])) {
                 foreach ($validated['questions'] as $qIdx => $qData) {
                     $qImagePath = null;
                     if ($request->hasFile("questions.{$qIdx}.image_file")) {
@@ -269,6 +309,7 @@ class TrainingController extends Controller
         }
 
         $validated = $request->validate([
+            'type' => ['nullable', 'string', 'in:training,user_manual'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'ministry' => ['nullable', 'string', 'max:255'],
@@ -281,7 +322,7 @@ class TrainingController extends Controller
             'steps.*.video_url' => ['nullable', 'string', 'url', 'max:255'],
             'steps.*.image_file' => ['nullable', 'file', 'image', 'max:5120'],
             'steps.*.audio_file' => ['nullable', 'file', 'mimes:mp3,wav,ogg,m4a,aac', 'max:15360'],
-            
+
             // test questions
             'questions' => ['nullable', 'array'],
             'questions.*.id' => ['nullable', 'integer'],
@@ -296,12 +337,22 @@ class TrainingController extends Controller
         ]);
 
         DB::transaction(function () use ($training, $validated, $request) {
+            $type = $validated['type'] ?? $training->type ?? 'training';
+            $hasTest = $type === 'user_manual' ? false : $validated['has_test'];
+            $passingScore = $type === 'user_manual' ? 80 : $validated['passing_score'];
+            $shareToken = $training->share_token;
+            if ($type === 'user_manual' && ! $shareToken) {
+                $shareToken = Str::random(32);
+            }
+
             $training->update([
+                'type' => $type,
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
                 'ministry' => $validated['ministry'] ?? null,
-                'has_test' => $validated['has_test'],
-                'passing_score' => $validated['passing_score'],
+                'has_test' => $hasTest,
+                'passing_score' => $passingScore,
+                'share_token' => $shareToken,
             ]);
 
             // Keep track of preserved IDs to delete the rest
@@ -335,7 +386,7 @@ class TrainingController extends Controller
                     $fields['audio_path'] = $audioPath;
                 }
 
-                if (!empty($stepData['id'])) {
+                if (! empty($stepData['id'])) {
                     $step = TrainingStep::findOrFail($stepData['id']);
                     $step->update($fields);
                     $keepStepIds[] = $step->id;
@@ -349,7 +400,7 @@ class TrainingController extends Controller
             $training->steps()->whereNotIn('id', $keepStepIds)->delete();
 
             // Create/Update questions
-            if ($validated['has_test'] && !empty($validated['questions'])) {
+            if ($validated['has_test'] && ! empty($validated['questions'])) {
                 foreach ($validated['questions'] as $qIdx => $qData) {
                     $qImagePath = null;
                     if ($request->hasFile("questions.{$qIdx}.image_file")) {
@@ -366,7 +417,7 @@ class TrainingController extends Controller
                         $qFields['image_path'] = $qImagePath;
                     }
 
-                    if (!empty($qData['id'])) {
+                    if (! empty($qData['id'])) {
                         $question = TestQuestion::findOrFail($qData['id']);
                         $question->update($qFields);
                         $keepQuestionIds[] = $question->id;
@@ -391,7 +442,7 @@ class TrainingController extends Controller
                             $oFields['image_path'] = $oImagePath;
                         }
 
-                        if (!empty($oData['id'])) {
+                        if (! empty($oData['id'])) {
                             $option = QuestionOption::findOrFail($oData['id']);
                             $option->update($oFields);
                             $keepOptionIds[] = $option->id;
@@ -466,7 +517,7 @@ class TrainingController extends Controller
                         [
                             'assigned_by' => $user->id,
                             'due_at' => $validated['due_at'] ?? null,
-                            'status' => 'pending'
+                            'status' => 'pending',
                         ]
                     );
                 }
@@ -499,9 +550,9 @@ class TrainingController extends Controller
         // Load steps, questions and option content.
         // Critical Security: We strip the 'is_correct' attribute from question options to avoid client-side inspecting.
         $training->load(['steps']);
-        
+
         $questions = $training->testQuestions()
-            ->with(['options' => fn($q) => $q->select('id', 'question_id', 'option_text', 'image_path')])
+            ->with(['options' => fn ($q) => $q->select('id', 'question_id', 'option_text', 'image_path')])
             ->orderBy('sort_order')
             ->get();
 
@@ -596,9 +647,68 @@ class TrainingController extends Controller
         // Flash parameters to display in frontend overlay
         return redirect()->route('trainings.index')->with('flash', [
             'type' => $passed ? 'success' : 'error',
-            'message' => $passed 
-                ? "Congratulations! You passed the training test with {$score}%!" 
+            'message' => $passed
+                ? "Congratulations! You passed the training test with {$score}%!"
                 : "You scored {$score}%, which is below the required {$training->passing_score}%. Please try again.",
+        ]);
+    }
+
+    /**
+     * Toggle public sharing of user manual/training.
+     */
+    public function toggleShare(Request $request, Training $training): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user->hasModuleAccess('trainings') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
+            abort(403, 'Unauthorized.');
+        }
+
+        if ($training->church_id !== $user->current_church_id) {
+            abort(403, 'Unauthorized.');
+        }
+
+        if ($training->share_token) {
+            $training->update([
+                'share_token' => null,
+            ]);
+        } else {
+            $training->update([
+                'share_token' => Str::random(32),
+            ]);
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * Display shared training/user manual publicly.
+     */
+    public function viewShared(string $token): Response
+    {
+        $training = Training::where('share_token', $token)
+            ->with(['steps', 'church'])
+            ->firstOrFail();
+
+        return Inertia::render('trainings/Shared', [
+            'training' => [
+                'id' => $training->id,
+                'type' => $training->type,
+                'title' => $training->title,
+                'description' => $training->description,
+                'ministry' => $training->ministry,
+                'church_name' => $training->church->name,
+                'steps' => $training->steps->map(function ($step) {
+                    return [
+                        'id' => $step->id,
+                        'title' => $step->title,
+                        'content' => $step->content,
+                        'image_path' => $step->image_path,
+                        'audio_path' => $step->audio_path,
+                        'video_url' => $step->video_url,
+                        'sort_order' => $step->sort_order,
+                    ];
+                }),
+            ],
         ]);
     }
 }

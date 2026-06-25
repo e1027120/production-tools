@@ -173,6 +173,7 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
     Route::post('trainings/{training}/assign', [TrainingController::class, 'assign'])->name('trainings.assign');
     Route::get('trainings/{training}/play', [TrainingController::class, 'play'])->name('trainings.play');
     Route::post('trainings/{training}/submit', [TrainingController::class, 'submit'])->name('trainings.submit');
+    Route::post('trainings/{training}/toggle-share', [TrainingController::class, 'toggleShare'])->name('trainings.toggle-share');
 
     // Technical Diagrams Module
     Route::resource('diagrams', DiagramController::class);
@@ -193,5 +194,8 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
 
 // Public Guest Route for Shared Shopping Lists
 Route::get('shopping-lists/shared/{token}', [ShoppingListController::class, 'viewShared'])->name('shopping-lists.shared.view');
+
+// Public Guest Route for Shared Trainings / User Manuals Checklist
+Route::get('trainings/shared/{token}', [TrainingController::class, 'viewShared'])->name('trainings.shared.view');
 
 require __DIR__.'/settings.php';

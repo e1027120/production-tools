@@ -12,10 +12,12 @@ import {
     CheckCircle, 
     XCircle, 
     Clock, 
-    ArrowRight,
     Search,
     BookOpenCheck,
-    FileText
+    FileText,
+    Share2,
+    Copy,
+    Eye
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,8 +72,18 @@ interface Report {
     completed_at: string;
 }
 
+interface UserManual {
+    id: number;
+    title: string;
+    description: string | null;
+    ministry: string | null;
+    steps_count: number;
+    share_token: string | null;
+}
+
 const props = defineProps<{
     trainings: Training[];
+    userManuals: UserManual[];
     assignments: Assignment[];
     myHistory: Attempt[];
     churchMembers: Member[];
@@ -135,6 +147,19 @@ const formatDate = (isoString: string | null) => {
     if (!isoString) return 'No due date';
     const d = new Date(isoString);
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+const toggleManualShare = (id: number) => {
+    useForm({}).post(`/trainings/${id}/toggle-share`, {
+        preserveScroll: true,
+    });
+};
+
+const copyShareLink = (token: string) => {
+    const url = `${window.location.origin}/trainings/shared/${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+        alert('Public checklist link copied to clipboard!');
+    });
 };
 </script>
 
@@ -279,6 +304,70 @@ const formatDate = (isoString: string | null) => {
                     </table>
                 </div>
             </div>
+
+            <!-- User Manuals & System Guides -->
+            <div class="pt-4 border-t border-border/40">
+                <h2 class="font-bold text-lg text-foreground mb-4 flex items-center gap-2">
+                    <BookOpen class="size-5 text-[#1AC18C]" /> 
+                    User Manuals & System Guides
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#1AC18C]/10 text-[#1AC18C]">
+                        {{ userManuals.length }}
+                    </span>
+                </h2>
+
+                <div v-if="userManuals.length === 0" class="border border-border/40 rounded-2xl bg-card p-8 text-center flex flex-col items-center justify-center space-y-2">
+                    <BookOpen class="size-8 text-muted-foreground" />
+                    <h3 class="font-bold text-sm text-foreground">No manuals uploaded yet</h3>
+                    <p class="text-xs text-muted-foreground max-w-sm">Church system manuals and setup guides will appear here.</p>
+                </div>
+
+                <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <div 
+                        v-for="manual in userManuals" 
+                        :key="manual.id"
+                        class="bg-card border border-border/60 hover:border-[#1AC18C]/40 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 relative group overflow-hidden"
+                    >
+                        <!-- Ministry badge -->
+                        <span 
+                            v-if="manual.ministry" 
+                            class="absolute top-4 right-4 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#1AC18C]/10 text-[#1AC18C]"
+                        >
+                            {{ manual.ministry }}
+                        </span>
+
+                        <div class="space-y-3 pr-14">
+                            <h3 class="font-bold text-base text-foreground leading-snug group-hover:text-[#1AC18C] transition-colors">{{ manual.title }}</h3>
+                            <p class="text-xs text-muted-foreground line-clamp-2 h-8">{{ manual.description || 'No description provided.' }}</p>
+                        </div>
+
+                        <div class="pt-4 border-t border-border/40 mt-4 flex items-center justify-between text-[11px] text-muted-foreground pb-4">
+                            <div class="flex items-center gap-1">
+                                <FileText class="size-3.5 text-muted-foreground" />
+                                <span>{{ manual.steps_count }} steps checklist</span>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <a 
+                                v-if="manual.share_token"
+                                :href="`/trainings/shared/${manual.share_token}`"
+                                target="_blank"
+                                class="flex-1 inline-flex items-center justify-center rounded-xl bg-[#22273C] dark:bg-muted text-white dark:text-foreground text-xs font-semibold px-4 py-2 hover:bg-[#1AC18C] hover:text-white dark:hover:bg-[#1AC18C] dark:hover:text-white transition-all duration-200 cursor-pointer shadow-sm"
+                            >
+                                Open Checklist
+                                <ArrowRight class="ml-1.5 size-3.5" />
+                            </a>
+                            <Link 
+                                :href="`/trainings/${manual.id}/play`"
+                                class="inline-flex items-center justify-center rounded-xl bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold px-3 py-2 cursor-pointer transition-all"
+                                title="View Step Slides"
+                            >
+                                <Eye class="size-4" />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- TAB 2: Manage & Reports -->
@@ -291,7 +380,7 @@ const formatDate = (isoString: string | null) => {
                         class="pb-2 text-xs font-semibold border-b-2 cursor-pointer transition-all"
                         :class="activeAdminTab === 'directory' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'"
                     >
-                        Trainings Directory
+                        Trainings & Manuals Directory
                     </button>
                     <button 
                         @click="activeAdminTab = 'reports'" 
@@ -307,7 +396,7 @@ const formatDate = (isoString: string | null) => {
                     href="/trainings/create"
                     class="inline-flex items-center justify-center rounded-xl bg-primary text-primary-foreground text-xs font-semibold px-3.5 py-1.5 hover:bg-primary/95 transition-all duration-200 cursor-pointer shadow-sm"
                 >
-                    <Plus class="mr-1.5 size-4" /> Create Training
+                    <Plus class="mr-1.5 size-4" /> Create Training / Manual
                 </Link>
             </div>
 
@@ -318,13 +407,13 @@ const formatDate = (isoString: string | null) => {
                     <Search class="absolute left-3 top-2.5 size-4 text-muted-foreground" />
                     <Input 
                         v-model="adminSearch"
-                        placeholder="Search trainings by title or ministry..."
+                        placeholder="Search trainings or manuals..."
                         class="pl-9 rounded-xl text-xs"
                     />
                 </div>
 
                 <div v-if="filteredTrainings.length === 0" class="text-center py-10 border border-border/40 rounded-2xl bg-card text-muted-foreground text-xs italic">
-                    No trainings found.
+                    No documents found.
                 </div>
 
                 <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -335,47 +424,82 @@ const formatDate = (isoString: string | null) => {
                     >
                         <div class="space-y-2">
                             <div class="flex items-start justify-between gap-4">
-                                <span 
-                                    v-if="t.ministry" 
-                                    class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border/60"
-                                >
-                                    {{ t.ministry }}
-                                </span>
-                                <span class="text-[9px] font-bold uppercase text-muted-foreground" v-else>General</span>
+                                <div class="flex flex-col gap-1">
+                                    <span 
+                                        v-if="t.ministry" 
+                                        class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border/60 self-start"
+                                    >
+                                        {{ t.ministry }}
+                                    </span>
+                                    <span class="text-[9px] font-bold uppercase text-muted-foreground" v-else>General</span>
+                                    
+                                    <span 
+                                        class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded self-start mt-1"
+                                        :class="t.type === 'user_manual' ? 'bg-[#1AC18C]/15 text-[#1AC18C]' : 'bg-blue-500/15 text-blue-500'"
+                                    >
+                                        {{ t.type === 'user_manual' ? 'User Manual' : 'Training' }}
+                                    </span>
+                                </div>
 
                                 <span class="text-xs text-muted-foreground font-semibold flex items-center gap-0.5">
                                     <FileText class="size-3.5" /> {{ t.steps_count }} steps
                                 </span>
                             </div>
 
-                            <h3 class="font-bold text-base text-foreground leading-snug">{{ t.title }}</h3>
+                            <h3 class="font-bold text-base text-foreground leading-snug pt-1">{{ t.title }}</h3>
                             <p class="text-xs text-muted-foreground line-clamp-2">{{ t.description || 'No description.' }}</p>
                         </div>
 
                         <!-- Stats & Metadata -->
                         <div class="grid grid-cols-2 gap-2 pt-4 border-t border-border/40 mt-4 text-[10px] text-muted-foreground">
                             <div>
-                                <span class="block text-muted-foreground uppercase text-[8px] font-bold">Assignments</span>
-                                <span class="font-bold text-foreground text-xs">{{ t.assignments_count }} users</span>
+                                <span class="block text-muted-foreground uppercase text-[8px] font-bold" v-if="t.type !== 'user_manual'">Assignments</span>
+                                <span class="font-bold text-foreground text-xs" v-if="t.type !== 'user_manual'">{{ t.assignments_count }} users</span>
+                                <span class="block text-muted-foreground uppercase text-[8px] font-bold" v-if="t.type === 'user_manual'">Link Status</span>
+                                <span class="font-semibold text-xs text-foreground" v-if="t.type === 'user_manual'">
+                                    {{ t.share_token ? 'Shared Publicly' : 'Private' }}
+                                </span>
                             </div>
                             <div>
-                                <span class="block text-muted-foreground uppercase text-[8px] font-bold">Passing score</span>
-                                <span class="font-bold text-foreground text-xs">{{ t.passing_score }}%</span>
+                                <span class="block text-muted-foreground uppercase text-[8px] font-bold" v-if="t.type !== 'user_manual'">Passing score</span>
+                                <span class="font-bold text-foreground text-xs" v-if="t.type !== 'user_manual'">{{ t.passing_score }}%</span>
+                                <span class="block text-muted-foreground uppercase text-[8px] font-bold" v-if="t.type === 'user_manual'">System Checklist</span>
+                                <span class="font-bold text-[#1AC18C] text-xs" v-if="t.type === 'user_manual'">Ready</span>
                             </div>
                         </div>
 
-                        <div class="pt-4 flex gap-2">
+                        <div class="pt-4 flex gap-2 flex-wrap items-center">
                             <Button 
+                                v-if="t.type !== 'user_manual'"
                                 @click="openAssignModal(t)"
                                 class="flex-1 bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs rounded-xl cursor-pointer"
                             >
                                 <Users class="mr-1.5 size-3.5" /> Assign
                             </Button>
+
+                            <button 
+                                v-else
+                                @click="toggleManualShare(t.id)"
+                                class="flex-1 inline-flex items-center justify-center rounded-xl text-xs font-semibold px-3 py-1.5 border border-border cursor-pointer hover:bg-muted/50 transition-all duration-200"
+                                :class="t.share_token ? 'bg-[#1AC18C]/10 text-[#1AC18C] border-[#1AC18C]/30' : 'bg-muted text-muted-foreground'"
+                            >
+                                <Share2 class="mr-1.5 size-3.5" /> 
+                                {{ t.share_token ? 'Public Link' : 'Share Link' }}
+                            </button>
+
+                            <button 
+                                v-if="t.type === 'user_manual' && t.share_token"
+                                @click="copyShareLink(t.share_token)"
+                                class="inline-flex size-9 items-center justify-center rounded-xl bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer"
+                                title="Copy Share Link"
+                            >
+                                <Copy class="size-4" />
+                            </button>
                             
                             <Link 
                                 :href="`/trainings/${t.id}/edit`"
                                 class="inline-flex size-9 items-center justify-center rounded-xl bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 cursor-pointer"
-                                title="Edit Training"
+                                title="Edit Document"
                             >
                                 <Edit class="size-4" />
                             </Link>
@@ -384,7 +508,7 @@ const formatDate = (isoString: string | null) => {
                                 @click="deleteTraining(t.id)"
                                 variant="ghost"
                                 class="size-9 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-xl cursor-pointer"
-                                title="Delete Training"
+                                title="Delete Document"
                             >
                                 <Trash2 class="size-4" />
                             </Button>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { 
     GraduationCap, 
@@ -51,6 +51,7 @@ interface Question {
 const props = defineProps<{
     training: {
         id: number;
+        type?: string;
         title: string;
         description: string | null;
         ministry: string | null;
@@ -64,6 +65,7 @@ const props = defineProps<{
 const isEditing = ref(false);
 
 const form = useForm({
+    type: 'training',
     title: '',
     description: '',
     ministry: '',
@@ -73,9 +75,16 @@ const form = useForm({
     questions: [] as Question[],
 });
 
+watch(() => form.type, (newType) => {
+    if (newType === 'user_manual') {
+        form.has_test = false;
+    }
+});
+
 onMounted(() => {
     if (props.training) {
         isEditing.value = true;
+        form.type = props.training.type || 'training';
         form.title = props.training.title;
         form.description = props.training.description || '';
         form.ministry = props.training.ministry || '';
@@ -239,10 +248,23 @@ const submitForm = () => {
             <!-- Left panel: Details & Settings -->
             <div class="lg:col-span-1 space-y-6">
                 <div class="bg-card border border-border/60 rounded-2xl p-5 space-y-4">
-                    <h2 class="font-bold text-base text-foreground border-b border-border/40 pb-2">Training Properties</h2>
+                    <h2 class="font-bold text-base text-foreground border-b border-border/40 pb-2">Properties</h2>
 
                     <div class="space-y-1.5">
-                        <Label for="t-title">Course Title</Label>
+                        <Label for="t-type">Document Type</Label>
+                        <select 
+                            id="t-type"
+                            v-model="form.type"
+                            class="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
+                        >
+                            <option value="training">Training Workflow</option>
+                            <option value="user_manual">User Manual / Protocol</option>
+                        </select>
+                        <InputError :message="form.errors.type" />
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <Label for="t-title">Title</Label>
                         <Input 
                             id="t-title"
                             v-model="form.title"
@@ -276,7 +298,7 @@ const submitForm = () => {
                         <textarea 
                             id="t-desc"
                             v-model="form.description"
-                            placeholder="Provide a short description of what this training covers..."
+                            placeholder="Provide a short description of what this documentation covers..."
                             rows="4"
                             class="flex w-full rounded-xl border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
                         ></textarea>
@@ -284,7 +306,7 @@ const submitForm = () => {
                     </div>
 
                     <!-- Test toggle settings -->
-                    <div class="pt-2 border-t border-border/40 space-y-3">
+                    <div v-if="form.type === 'training'" class="pt-2 border-t border-border/40 space-y-3">
                         <div class="flex items-center justify-between">
                             <Label for="has-test" class="font-bold text-xs text-foreground cursor-pointer block">Attach Optional Test</Label>
                             <input 

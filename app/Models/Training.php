@@ -10,11 +10,13 @@ class Training extends Model
 {
     protected $fillable = [
         'church_id',
+        'type',
         'title',
         'description',
         'ministry',
         'has_test',
         'passing_score',
+        'share_token',
         'created_by',
     ];
 
