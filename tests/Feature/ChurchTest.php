@@ -12,6 +12,7 @@ test('newly registered users get a default church and are set as admin', functio
         'email' => 'dave@example.com',
         'password' => 'Password123!',
         'password_confirmation' => 'Password123!',
+        'invitation' => 'join-us',
     ]);
 
     expect($newUser->current_church_id)->not->toBeNull();

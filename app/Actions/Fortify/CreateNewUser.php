@@ -23,6 +23,16 @@ class CreateNewUser implements CreatesNewUsers
         Validator::make($input, [
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
+            'invitation' => [
+                'required',
+                'string',
+                function ($attribute, $value, $fail) {
+                    $configuredHash = config('auth.invitation_hash');
+                    if (empty($configuredHash) || $value !== $configuredHash) {
+                        $fail('The provided invitation code/link is invalid or expired.');
+                    }
+                }
+            ],
         ])->validate();
 
         return DB::transaction(function () use ($input) {

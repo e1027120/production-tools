@@ -114,4 +114,14 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Registration Invitation Hash
+    |--------------------------------------------------------------------------
+    |
+    | The token / hash required to access registration and register.
+    |
+    */
+    'invitation_hash' => env('REGISTRATION_INVITATION_HASH', 'join-us'),
+
 ];

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { dashboard, login, register } from '@/routes';
+import { dashboard, login } from '@/routes';
 import { 
     ArrowRight, 
     Activity, 
@@ -34,21 +34,11 @@ import AppLogoIcon from '@/components/AppLogoIcon.vue';
 
             <nav class="flex items-center gap-4">
                 <Link
-                    v-if="$page.props.auth.user"
-                    :href="dashboard()"
-                    class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all duration-200"
+                    :href="$page.props.auth.user ? dashboard() : login()"
+                    class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-md hover:bg-primary/95 transition-all duration-200 hover:shadow-primary/10 hover:shadow-lg"
                 >
-                    Dashboard
-                    <ArrowRight class="ml-2 size-4" />
+                    {{ $page.props.auth.user ? 'Dashboard' : 'Log in' }}
                 </Link>
-                <template v-else>
-                    <Link
-                        :href="login()"
-                        class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
-                    >
-                        Log in
-                    </Link>
-                </template>
             </nav>
         </header>
 

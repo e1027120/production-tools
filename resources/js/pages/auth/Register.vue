@@ -12,6 +12,7 @@ import { store } from '@/routes/register';
 
 defineProps<{
     passwordRules: string;
+    invitation: string;
 }>();
 
 defineOptions({
@@ -31,6 +32,7 @@ defineOptions({
         v-slot="{ errors, processing }"
         class="flex flex-col gap-6"
     >
+        <input type="hidden" name="invitation" :value="invitation" />
         <div class="grid gap-6">
             <div class="grid gap-2">
                 <Label for="name">Name</Label>
