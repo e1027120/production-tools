@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\CablePlanController;
 use App\Http\Controllers\CatalogDeviceController;
 use App\Http\Controllers\ChurchController;
 use App\Http\Controllers\DiagramController;
 use App\Http\Controllers\RackController;
 use App\Http\Controllers\ShoppingListController;
 use App\Http\Controllers\TrainingController;
+use App\Models\CablePlan;
 use App\Models\CatalogDevice;
 use App\Models\Diagram;
 use App\Models\Rack;
@@ -20,11 +22,13 @@ Route::inertia('/', 'Welcome')->name('home');
 
 Route::middleware(['auth', 'verified', 'church'])->group(function () {
     Route::get('dashboard', function (Request $request) {
-        $racks = Rack::where('church_id', $request->user()->current_church_id)->get();
+        $churchId = $request->user()->current_church_id;
+
+        // 1. Racks Module
+        $racks = Rack::where('church_id', $churchId)->orderBy('id', 'desc')->get();
         $totalRacks = $racks->count();
         $totalDevices = 0;
         $totalPower = 0;
-
         foreach ($racks as $rack) {
             $devs = $rack->devices ?? [];
             $totalDevices += count($devs);
@@ -32,30 +36,100 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
                 $totalPower += $dev['power_consumption'] ?? 0;
             }
         }
+        $latestRacks = $racks->take(3)->map(function ($rack) {
+            $totalRackPower = 0;
+            foreach ($rack->devices ?? [] as $dev) {
+                $totalRackPower += $dev['power_consumption'] ?? 0;
+            }
+
+            return [
+                'id' => $rack->id,
+                'name' => $rack->name,
+                'size' => $rack->size,
+                'devices_count' => count($rack->devices ?? []),
+                'power' => $totalRackPower,
+            ];
+        })->values();
 
         $totalCatalogDevices = CatalogDevice::whereNull('church_id')
-            ->orWhere('church_id', $request->user()->current_church_id)
+            ->orWhere('church_id', $churchId)
             ->count();
 
-        // Shopping List Module Stats
-        $shoppingLists = ShoppingList::where('church_id', $request->user()->current_church_id)
+        // 2. Shopping Lists Module
+        $shoppingLists = ShoppingList::where('church_id', $churchId)
             ->with('items')
+            ->orderBy('id', 'desc')
             ->get();
-
         $totalShoppingLists = $shoppingLists->count();
         $sharedShoppingLists = $shoppingLists->whereNotNull('share_token')->count();
         $totalBudgetPrice = $shoppingLists->sum(fn ($list) => $list->items->sum('total_price'));
+        $latestShoppingLists = $shoppingLists->take(3)->map(function ($list) {
+            return [
+                'id' => $list->id,
+                'name' => $list->name,
+                'items_count' => $list->items->count(),
+                'total_price' => $list->items->sum('total_price'),
+                'is_shared' => ! empty($list->share_token),
+            ];
+        })->values();
 
-        // Trainings Module Stats
-        $totalTrainings = Training::where('church_id', $request->user()->current_church_id)->count();
+        // 3. Trainings Module
+        $trainings = Training::where('church_id', $churchId)
+            ->withCount('steps')
+            ->orderBy('id', 'desc')
+            ->get();
+        $totalTrainings = $trainings->count();
         $pendingAssignments = TrainingAssignment::where('status', 'pending')
-            ->whereHas('training', function ($q) use ($request) {
-                $q->where('church_id', $request->user()->current_church_id);
+            ->whereHas('training', function ($q) use ($churchId) {
+                $q->where('church_id', $churchId);
             })
             ->count();
+        $latestTrainings = $trainings->take(3)->map(function ($t) {
+            return [
+                'id' => $t->id,
+                'title' => $t->title,
+                'ministry' => $t->ministry,
+                'steps_count' => $t->steps_count,
+            ];
+        })->values();
 
-        // Technical Diagrams Stats
-        $totalDiagrams = Diagram::where('church_id', $request->user()->current_church_id)->count();
+        // 4. Technical Diagrams
+        $diagrams = Diagram::where('church_id', $churchId)
+            ->orderBy('id', 'desc')
+            ->get();
+        $totalDiagrams = $diagrams->count();
+        $latestDiagrams = $diagrams->take(3)->map(function ($d) {
+            return [
+                'id' => $d->id,
+                'name' => $d->name,
+                'description' => $d->description,
+            ];
+        })->values();
+
+        // 5. Cable Calculator Module
+        $cablePlans = CablePlan::where('church_id', $churchId)->orderBy('id', 'desc')->get();
+        $totalCablePlans = $cablePlans->count();
+        $totalCableRuns = $cablePlans->sum(fn ($p) => count($p->cables ?? []));
+        $totalCablesLength = 0.0;
+        foreach ($cablePlans as $plan) {
+            foreach ($plan->cables ?? [] as $cable) {
+                $totalCablesLength += $plan->calculateCableLength($cable);
+            }
+        }
+        $latestCablePlans = $cablePlans->take(3)->map(function ($p) {
+            $planLength = 0.0;
+            foreach ($p->cables ?? [] as $cable) {
+                $planLength += $p->calculateCableLength($cable);
+            }
+
+            return [
+                'id' => $p->id,
+                'name' => $p->name,
+                'runs_count' => count($p->cables ?? []),
+                'length' => $planLength,
+                'unit' => $p->scale_unit,
+            ];
+        })->values();
 
         return Inertia::render('Dashboard', [
             'stats' => [
@@ -69,7 +143,15 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
                 'totalTrainings' => $totalTrainings,
                 'pendingAssignments' => $pendingAssignments,
                 'totalDiagrams' => $totalDiagrams,
+                'totalCablePlans' => $totalCablePlans,
+                'totalCableRuns' => $totalCableRuns,
+                'totalCablesLength' => $totalCablesLength,
             ],
+            'latestRacks' => $latestRacks,
+            'latestShoppingLists' => $latestShoppingLists,
+            'latestTrainings' => $latestTrainings,
+            'latestDiagrams' => $latestDiagrams,
+            'latestCablePlans' => $latestCablePlans,
         ]);
     })->name('dashboard');
 
@@ -103,6 +185,10 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
     Route::post('shopping-lists/{shopping_list}/toggle-share', [ShoppingListController::class, 'toggleShare'])->name('shopping-lists.toggle-share');
     Route::post('shopping-lists/{shopping_list}/share-email', [ShoppingListController::class, 'shareEmail'])->name('shopping-lists.share-email');
     Route::post('shopping-lists/{shopping_list}/remove-shared-email', [ShoppingListController::class, 'removeSharedEmail'])->name('shopping-lists.remove-shared-email');
+
+    // Cable Calculator Module
+    Route::resource('cable-plans', CablePlanController::class);
+    Route::post('cable-plans/{cable_plan}/upload', [CablePlanController::class, 'upload'])->name('cable-plans.upload');
 });
 
 // Public Guest Route for Shared Shopping Lists

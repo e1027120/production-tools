@@ -76,5 +76,8 @@ test('authenticated users can visit the dashboard and see accurate stats', funct
         ->where('stats.totalTrainings', 0)
         ->where('stats.pendingAssignments', 0)
         ->where('stats.totalDiagrams', 0)
+        ->where('stats.totalCablePlans', 0)
+        ->where('stats.totalCableRuns', 0)
+        ->where('stats.totalCablesLength', 0)
     );
 });

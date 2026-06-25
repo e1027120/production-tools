@@ -203,7 +203,7 @@ class ChurchController extends Controller
             // Attach user as Admin with default modules
             $church->users()->attach($user->id, [
                 'role' => 'Admin',
-                'modules' => ['racks', 'trainings', 'diagrams'],
+                'modules' => ['racks', 'trainings', 'diagrams', 'shopping_lists', 'cables'],
             ]);
 
             // Set as active church context

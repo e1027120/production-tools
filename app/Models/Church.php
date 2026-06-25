@@ -50,4 +50,12 @@ class Church extends Model
     {
         return $this->hasMany(ShoppingList::class);
     }
+
+    /**
+     * Cable plans associated with this church.
+     */
+    public function cablePlans(): HasMany
+    {
+        return $this->hasMany(CablePlan::class);
+    }
 }

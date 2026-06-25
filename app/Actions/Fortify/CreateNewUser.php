@@ -4,6 +4,7 @@ namespace App\Actions\Fortify;
 
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
+use App\Models\Church;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -31,7 +32,7 @@ class CreateNewUser implements CreatesNewUsers
                     if (empty($configuredHash) || $value !== $configuredHash) {
                         $fail('The provided invitation code/link is invalid or expired.');
                     }
-                }
+                },
             ],
         ])->validate();
 
@@ -42,14 +43,14 @@ class CreateNewUser implements CreatesNewUsers
                 'password' => $input['password'],
             ]);
 
-            $church = \App\Models\Church::create([
-                'name' => $user->name . "'s Church",
-                'description' => "Default production workspace for " . $user->name . ".",
+            $church = Church::create([
+                'name' => $user->name."'s Church",
+                'description' => 'Default production workspace for '.$user->name.'.',
             ]);
 
             $church->users()->attach($user->id, [
                 'role' => 'Admin',
-                'modules' => ['racks', 'trainings', 'diagrams'],
+                'modules' => ['racks', 'trainings', 'diagrams', 'shopping_lists', 'cables'],
             ]);
 
             $user->update([

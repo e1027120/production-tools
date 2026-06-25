@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid, Server, Settings, GraduationCap, Network, ShoppingBag } from '@lucide/vue';
+import { BookOpen, FolderGit2, LayoutGrid, Server, Settings, GraduationCap, Network, ShoppingBag, Ruler } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -69,6 +69,15 @@ const mainNavItems = computed<NavItem[]>(() => {
                 title: 'Shopping Lists',
                 href: '/shopping-lists',
                 icon: ShoppingBag,
+            });
+        }
+
+        const hasCablesAccess = ['Admin', 'Manager'].includes(role) || modules.includes('cables');
+        if (hasCablesAccess) {
+            items.push({
+                title: 'Cable Calculator',
+                href: '/cable-plans',
+                icon: Ruler,
             });
         }
 

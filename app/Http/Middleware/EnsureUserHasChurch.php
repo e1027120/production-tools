@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Church;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,14 +21,14 @@ class EnsureUserHasChurch
 
             if (! $church) {
                 // User has no churches, create a default one
-                $church = \App\Models\Church::create([
-                    'name' => $user->name . "'s Church",
-                    'description' => "Default production workspace for " . $user->name . ".",
+                $church = Church::create([
+                    'name' => $user->name."'s Church",
+                    'description' => 'Default production workspace for '.$user->name.'.',
                 ]);
 
                 $church->users()->attach($user->id, [
                     'role' => 'Admin',
-                    'modules' => ['racks', 'trainings', 'diagrams'],
+                    'modules' => ['racks', 'trainings', 'diagrams', 'shopping_lists', 'cables'],
                 ]);
             }
 
