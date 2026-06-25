@@ -169,7 +169,7 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
 
     // Trainings Module
     Route::resource('trainings', TrainingController::class)->except(['update']);
-    Route::post('trainings/{training}', [TrainingController::class, 'update'])->name('trainings.update');
+    Route::match(['PUT', 'POST'], 'trainings/{training}', [TrainingController::class, 'update'])->name('trainings.update');
     Route::post('trainings/{training}/assign', [TrainingController::class, 'assign'])->name('trainings.assign');
     Route::get('trainings/{training}/play', [TrainingController::class, 'play'])->name('trainings.play');
     Route::post('trainings/{training}/submit', [TrainingController::class, 'submit'])->name('trainings.submit');

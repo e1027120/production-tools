@@ -394,3 +394,51 @@ test('guests can view public simplified checklist using share token without logi
     $response->assertSee('Lighting Desk Setup');
     $response->assertSee('Fader Calibration');
 });
+
+test('admins can update an existing training or user manual', function () {
+    $admin = User::factory()->create();
+    $church = Church::create(['name' => 'First Church']);
+    $church->users()->attach($admin->id, ['role' => 'Admin']);
+    $admin->update(['current_church_id' => $church->id]);
+
+    $training = Training::create([
+        'church_id' => $church->id,
+        'type' => 'training',
+        'title' => 'Old Title',
+        'has_test' => true,
+        'passing_score' => 75,
+        'created_by' => $admin->id,
+    ]);
+
+    $step = $training->steps()->create([
+        'title' => 'Old Step Title',
+        'content' => 'Old Step Content',
+    ]);
+
+    $this->actingAs($admin);
+
+    // Send update request as PUT
+    $response = $this->put(route('trainings.update', $training), [
+        'type' => 'user_manual', // changing type
+        'title' => 'New Manual Title',
+        'description' => 'Updated description',
+        'ministry' => 'Audio',
+        'has_test' => false,
+        'passing_score' => 80,
+        'steps' => [
+            [
+                'id' => $step->id,
+                'title' => 'Updated Step Title',
+                'content' => 'Updated Step Content',
+            ],
+        ],
+    ]);
+
+    $response->assertRedirect(route('trainings.index'));
+
+    $training->refresh();
+    expect($training->title)->toBe('New Manual Title');
+    expect($training->type)->toBe('user_manual');
+    expect($training->steps()->count())->toBe(1);
+    expect($training->steps->first()->title)->toBe('Updated Step Title');
+});
