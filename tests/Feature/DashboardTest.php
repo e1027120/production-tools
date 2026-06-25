@@ -1,9 +1,9 @@
 <?php
 
-use App\Models\User;
-use App\Models\Rack;
 use App\Models\CatalogDevice;
 use App\Models\Church;
+use App\Models\Rack;
+use App\Models\User;
 
 test('guests are redirected to the login page', function () {
     $response = $this->get(route('dashboard'));
@@ -41,8 +41,8 @@ test('authenticated users can visit the dashboard and see accurate stats', funct
                 'u_height' => 1,
                 'power_consumption' => 50,
                 'weight' => 3.9,
-            ]
-        ]
+            ],
+        ],
     ]);
 
     Rack::factory()->create([
@@ -56,8 +56,8 @@ test('authenticated users can visit the dashboard and see accurate stats', funct
                 'u_height' => 2,
                 'power_consumption' => 45,
                 'weight' => 4.6,
-            ]
-        ]
+            ],
+        ],
     ]);
 
     $response = $this->get(route('dashboard'));
@@ -70,5 +70,11 @@ test('authenticated users can visit the dashboard and see accurate stats', funct
         ->where('stats.totalDevices', 3)
         ->where('stats.totalPower', 215) // 120 + 50 + 45 = 215
         ->where('stats.totalCatalogDevices', 5)
+        ->where('stats.totalShoppingLists', 0)
+        ->where('stats.sharedShoppingLists', 0)
+        ->where('stats.totalBudgetPrice', 0)
+        ->where('stats.totalTrainings', 0)
+        ->where('stats.pendingAssignments', 0)
+        ->where('stats.totalDiagrams', 0)
     );
 });

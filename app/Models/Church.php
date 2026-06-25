@@ -42,4 +42,12 @@ class Church extends Model
     {
         return $this->hasMany(CatalogDevice::class);
     }
+
+    /**
+     * Shopping lists associated with this church.
+     */
+    public function shoppingLists(): HasMany
+    {
+        return $this->hasMany(ShoppingList::class);
+    }
 }

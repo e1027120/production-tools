@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid, Server, Settings, GraduationCap, Network } from '@lucide/vue';
+import { BookOpen, FolderGit2, LayoutGrid, Server, Settings, GraduationCap, Network, ShoppingBag } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -60,6 +60,15 @@ const mainNavItems = computed<NavItem[]>(() => {
                 title: 'Technical Diagrams',
                 href: '/diagrams',
                 icon: Network,
+            });
+        }
+
+        const hasShoppingAccess = ['Admin', 'Manager'].includes(role) || modules.includes('shopping_lists');
+        if (hasShoppingAccess) {
+            items.push({
+                title: 'Shopping Lists',
+                href: '/shopping-lists',
+                icon: ShoppingBag,
             });
         }
 
