@@ -13,6 +13,8 @@ import { store } from '@/routes/register';
 defineProps<{
     passwordRules: string;
     invitation: string;
+    email?: string;
+    invite_token?: string;
 }>();
 
 defineOptions({
@@ -33,6 +35,7 @@ defineOptions({
         class="flex flex-col gap-6"
     >
         <input type="hidden" name="invitation" :value="invitation" />
+        <input type="hidden" name="invite_token" :value="invite_token" v-if="invite_token" />
         <div class="grid gap-6">
             <div class="grid gap-2">
                 <Label for="name">Name</Label>
@@ -59,6 +62,9 @@ defineOptions({
                     autocomplete="email"
                     name="email"
                     placeholder="email@example.com"
+                    :value="email"
+                    :readonly="!!email"
+                    :class="{ 'bg-muted text-muted-foreground select-none pointer-events-none': !!email }"
                 />
                 <InputError :message="errors.email" />
             </div>

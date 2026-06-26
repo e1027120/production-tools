@@ -76,6 +76,8 @@ class FortifyServiceProvider extends ServiceProvider
             return Inertia::render('auth/Register', [
                 'passwordRules' => Password::defaults()->toPasswordRulesString(),
                 'invitation' => $request->query('invitation'),
+                'email' => $request->query('email', ''),
+                'invite_token' => $request->query('invite_token', ''),
             ]);
         });
 

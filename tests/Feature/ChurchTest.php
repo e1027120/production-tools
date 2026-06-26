@@ -1,12 +1,15 @@
 <?php
 
-use App\Models\User;
+use App\Actions\Fortify\CreateNewUser;
+use App\Mail\MemberInvitationMail;
 use App\Models\Church;
+use App\Models\MemberInvitation;
 use App\Models\Rack;
-use App\Models\CatalogDevice;
+use App\Models\User;
+use Illuminate\Support\Facades\Mail;
 
 test('newly registered users get a default church and are set as admin', function () {
-    $action = new \App\Actions\Fortify\CreateNewUser();
+    $action = new CreateNewUser;
     $newUser = $action->create([
         'name' => 'Pastor Dave',
         'email' => 'dave@example.com',
@@ -16,7 +19,7 @@ test('newly registered users get a default church and are set as admin', functio
     ]);
 
     expect($newUser->current_church_id)->not->toBeNull();
-    
+
     $church = $newUser->currentChurch;
     expect($church->name)->toBe("Pastor Dave's Church");
 
@@ -113,7 +116,7 @@ test('manager role cannot rename church but can manage members', function () {
 test('standard user module access is gated', function () {
     $user = User::factory()->create();
     $church = Church::create(['name' => 'Church']);
-    
+
     // User role with racks module
     $church->users()->attach($user->id, [
         'role' => 'User',
@@ -178,3 +181,95 @@ test('non-admins cannot create a new church', function () {
     expect(Church::where('name', 'Attempted Church')->exists())->toBeFalse();
 });
 
+test('adding an existing user directly attaches them to the active church', function () {
+    $admin = User::factory()->create();
+    $existingUser = User::factory()->create(['email' => 'member@example.com']);
+    $church = Church::create(['name' => 'Grace Church']);
+
+    $church->users()->attach($admin->id, ['role' => 'Admin']);
+    $admin->update(['current_church_id' => $church->id]);
+
+    $this->actingAs($admin);
+
+    $response = $this->post(route('church.users.add'), [
+        'email' => 'member@example.com',
+        'role' => 'Manager',
+        'modules' => ['racks', 'trainings'],
+    ]);
+
+    $response->assertRedirect();
+
+    // Verify direct association
+    expect($church->users()->where('users.id', $existingUser->id)->exists())->toBeTrue();
+    $pivot = $church->users()->where('users.id', $existingUser->id)->first()->pivot;
+    expect($pivot->role)->toBe('Manager');
+    expect($pivot->modules)->toContain('racks');
+    expect($pivot->modules)->toContain('trainings');
+});
+
+test('adding a non-existing user email creates an invitation and sends an email', function () {
+    Mail::fake();
+
+    $admin = User::factory()->create();
+    $church = Church::create(['name' => 'Grace Church']);
+    $church->users()->attach($admin->id, ['role' => 'Admin']);
+    $admin->update(['current_church_id' => $church->id]);
+
+    $this->actingAs($admin);
+
+    $response = $this->post(route('church.users.add'), [
+        'email' => 'invitee@example.com',
+        'role' => 'User',
+        'modules' => ['cables'],
+    ]);
+
+    $response->assertRedirect();
+
+    // Verify invitation is created in DB
+    $invitation = MemberInvitation::where('email', 'invitee@example.com')->first();
+    expect($invitation)->not->toBeNull();
+    expect($invitation->church_id)->toBe($church->id);
+    expect($invitation->role)->toBe('User');
+    expect($invitation->modules)->toContain('cables');
+    expect($invitation->token)->not->toBeNull();
+
+    // Verify mail is sent
+    Mail::assertSent(MemberInvitationMail::class, function ($mail) use ($church, $invitation) {
+        return $mail->hasTo('invitee@example.com') &&
+               $mail->churchName === $church->name &&
+               str_contains($mail->invitationUrl, $invitation->token);
+    });
+});
+
+test('registering with a valid invitation token links the user to the correct church', function () {
+    $church = Church::create(['name' => 'Grace Church']);
+
+    $invitation = MemberInvitation::create([
+        'email' => 'invitee@example.com',
+        'church_id' => $church->id,
+        'role' => 'Manager',
+        'modules' => ['shopping_lists'],
+        'token' => 'test-invitation-token-123456',
+    ]);
+
+    $action = new CreateNewUser;
+    $newUser = $action->create([
+        'name' => 'Sarah Connor',
+        'email' => 'invitee@example.com',
+        'password' => 'Password123!',
+        'password_confirmation' => 'Password123!',
+        'invitation' => 'join-us',
+        'invite_token' => 'test-invitation-token-123456',
+    ]);
+
+    expect($newUser->current_church_id)->toBe($church->id);
+    expect($church->users()->where('users.id', $newUser->id)->exists())->toBeTrue();
+
+    $pivot = $newUser->currentChurchMember();
+    expect($pivot->role)->toBe('Manager');
+    expect($pivot->modules)->toContain('shopping_lists');
+    expect($pivot->modules)->not->toContain('cables');
+
+    // Invitation should be cleaned up / deleted
+    expect(MemberInvitation::where('email', 'invitee@example.com')->exists())->toBeFalse();
+});

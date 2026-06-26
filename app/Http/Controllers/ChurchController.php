@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\MemberInvitationMail;
 use App\Models\Church;
+use App\Models\MemberInvitation;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -98,26 +102,57 @@ class ChurchController extends Controller
         }
 
         $validated = $request->validate([
-            'email' => ['required', 'email', 'exists:users,email'],
+            'email' => ['required', 'email'],
             'role' => ['required', 'string', 'in:Admin,Manager,User'],
             'modules' => ['nullable', 'array'],
-        ], [
-            'email.exists' => 'A user with this email address does not exist on our platform.',
         ]);
 
-        $targetUser = User::where('email', $validated['email'])->firstOrFail();
+        // 1. Check if user already exists on the platform
+        $targetUser = User::where('email', $validated['email'])->first();
 
-        // Check if user is already in this church
-        if ($church->users()->where('users.id', $targetUser->id)->exists()) {
-            return back()->withErrors([
-                'email' => 'This user is already a member of this church.',
+        if ($targetUser) {
+            // Check if user is already in this church
+            if ($church->users()->where('users.id', $targetUser->id)->exists()) {
+                return back()->withErrors([
+                    'email' => 'This user is already a member of this church.',
+                ]);
+            }
+
+            // Directly attach existing user
+            $church->users()->attach($targetUser->id, [
+                'role' => $validated['role'],
+                'modules' => $validated['modules'] ?? [],
             ]);
+
+            return redirect()->back();
         }
 
-        $church->users()->attach($targetUser->id, [
-            'role' => $validated['role'],
-            'modules' => $validated['modules'] ?? [],
+        // 2. If user does NOT exist, generate and send an invitation
+        $token = Str::random(40);
+
+        // Save or update existing invitation for this email
+        MemberInvitation::updateOrCreate(
+            ['email' => $validated['email']],
+            [
+                'church_id' => $church->id,
+                'role' => $validated['role'],
+                'modules' => $validated['modules'] ?? [],
+                'token' => $token,
+            ]
+        );
+
+        // Build invitation URL
+        $invitationHash = config('auth.invitation_hash');
+        $url = route('register', [
+            'invitation' => $invitationHash,
+            'invite_token' => $token,
+            'email' => $validated['email'],
         ]);
+
+        // Send invitation email
+        Mail::to($validated['email'])->send(
+            new MemberInvitationMail($url, $church->name)
+        );
 
         return redirect()->back();
     }
