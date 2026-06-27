@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
 import { dashboard } from '@/routes';
 import { Server, Layers, Zap, Sliders, ArrowRight, ShoppingBag, FileText, Share2, DollarSign, GraduationCap, Network, Activity, Ruler } from '@lucide/vue';
@@ -58,6 +59,18 @@ const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 };
 
+const page = usePage();
+const auth = computed(() => page.props.auth as any);
+const currentChurch = computed(() => auth.value?.currentChurch);
+const userRole = computed(() => currentChurch.value?.pivot?.role || 'User');
+const userModules = computed(() => currentChurch.value?.pivot?.modules || []);
+
+const hasRacksAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('racks'));
+const hasTrainingsAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('trainings'));
+const hasDiagramsAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('diagrams'));
+const hasShoppingAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('shopping_lists'));
+const hasCablesAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('cables'));
+
 defineOptions({
     layout: {
         breadcrumbs: [
@@ -74,9 +87,18 @@ defineOptions({
     <Head title="Dashboard" />
 
     <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-        <div class="grid auto-rows-min gap-4 md:grid-cols-3">
+        <!-- Welcoming Empty State if No Modules Active -->
+        <div v-if="!hasRacksAccess && !hasShoppingAccess && !hasTrainingsAccess && !hasDiagramsAccess && !hasCablesAccess" class="flex flex-col justify-center items-center text-center p-12 border border-dashed border-border/80 rounded-2xl bg-card min-h-[400px] space-y-4">
+            <div class="size-16 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
+                <Sliders class="size-8 animate-pulse text-[#1AC18C]" />
+            </div>
+            <h3 class="font-bold text-lg text-foreground">Welcome to Production Tools</h3>
+            <p class="text-sm text-muted-foreground max-w-md">You do not currently have access to any active modules. Please contact your administrator to assign modules to your workspace account.</p>
+        </div>
+
+        <div v-if="hasRacksAccess || hasShoppingAccess || hasTrainingsAccess" class="grid auto-rows-min gap-4 md:grid-cols-3">
             <!-- 19" Racks Module Card -->
-            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
+            <div v-if="hasRacksAccess" class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
                 <!-- Decorative background elements -->
                 <div class="absolute -right-4 -top-4 size-24 rounded-full bg-[#1AC18C]/5 group-hover:scale-125 transition-transform duration-500 blur-xl"></div>
                 
@@ -148,7 +170,7 @@ defineOptions({
             </div>
 
             <!-- Shopping Lists Module Card -->
-            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
+            <div v-if="hasShoppingAccess" class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
                 <!-- Decorative background elements -->
                 <div class="absolute -right-4 -top-4 size-24 rounded-full bg-[#1AC18C]/5 group-hover:scale-125 transition-transform duration-500 blur-xl"></div>
                 
@@ -215,7 +237,7 @@ defineOptions({
             </div>
 
             <!-- Trainings Module Card -->
-            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
+            <div v-if="hasTrainingsAccess" class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
                 <!-- Decorative background elements -->
                 <div class="absolute -right-4 -top-4 size-24 rounded-full bg-[#1AC18C]/5 group-hover:scale-125 transition-transform duration-500 blur-xl"></div>
                 
@@ -278,9 +300,9 @@ defineOptions({
         </div>
 
         <!-- Technical Diagrams Widget & Full Width Area -->
-        <div class="grid gap-4 md:grid-cols-3">
+        <div v-if="hasDiagramsAccess || hasCablesAccess" class="grid gap-4 md:grid-cols-3">
             <!-- Technical Diagrams Widget Card -->
-            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
+            <div v-if="hasDiagramsAccess" class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
                 <!-- Decorative background elements -->
                 <div class="absolute -right-4 -top-4 size-24 rounded-full bg-[#1AC18C]/5 group-hover:scale-125 transition-transform duration-500 blur-xl"></div>
                 
@@ -337,7 +359,7 @@ defineOptions({
             </div>
 
             <!-- Cable Calculator Widget Card -->
-            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
+            <div v-if="hasCablesAccess" class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
                 <!-- Decorative background elements -->
                 <div class="absolute -right-4 -top-4 size-24 rounded-full bg-[#1AC18C]/5 group-hover:scale-125 transition-transform duration-500 blur-xl"></div>
                 
