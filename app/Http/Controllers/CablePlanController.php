@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\CablePlan;
+use App\Models\CableType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -112,6 +114,7 @@ class CablePlanController extends Controller
                 'created_by' => $cablePlan->creator->name,
                 'created_at' => $cablePlan->created_at?->toIso8601String(),
             ],
+            'cableTypes' => CableType::getForChurch($user->current_church_id),
         ]);
     }
 
@@ -204,6 +207,104 @@ class CablePlanController extends Controller
         $cablePlan->update([
             'floor_plan_path' => $path,
         ]);
+
+        return redirect()->back();
+    }
+
+    /**
+     * Store a newly created cable type.
+     */
+    public function typesStore(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user->hasModuleAccess('cables')) {
+            abort(403, 'You do not have access to this module.');
+        }
+
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('cable_types')->where('church_id', $user->current_church_id),
+            ],
+            'color' => ['required', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'price_per_m' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        CableType::create([
+            'church_id' => $user->current_church_id,
+            'name' => $validated['name'],
+            'color' => $validated['color'],
+            'price_per_m' => $validated['price_per_m'],
+        ]);
+
+        return redirect()->back();
+    }
+
+    /**
+     * Update the specified cable type.
+     */
+    public function typesUpdate(Request $request, CableType $cableType): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user->hasModuleAccess('cables') || $cableType->church_id !== $user->current_church_id) {
+            abort(403, 'Unauthorized.');
+        }
+
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('cable_types')
+                    ->where('church_id', $user->current_church_id)
+                    ->ignore($cableType->id),
+            ],
+            'color' => ['required', 'string', 'max:7', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'price_per_m' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $oldName = $cableType->name;
+        $newName = $validated['name'];
+
+        $cableType->update([
+            'name' => $newName,
+            'color' => $validated['color'],
+            'price_per_m' => $validated['price_per_m'],
+        ]);
+
+        if ($oldName !== $newName) {
+            $plans = CablePlan::where('church_id', $user->current_church_id)->get();
+            foreach ($plans as $plan) {
+                $cables = $plan->cables ?? [];
+                $changed = false;
+                foreach ($cables as &$cable) {
+                    if (($cable['type'] ?? '') === $oldName) {
+                        $cable['type'] = $newName;
+                        $changed = true;
+                    }
+                }
+                if ($changed) {
+                    $plan->update(['cables' => $cables]);
+                }
+            }
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * Remove the specified cable type.
+     */
+    public function typesDestroy(Request $request, CableType $cableType): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user->hasModuleAccess('cables') || $cableType->church_id !== $user->current_church_id) {
+            abort(403, 'Unauthorized.');
+        }
+
+        $cableType->delete();
 
         return redirect()->back();
     }

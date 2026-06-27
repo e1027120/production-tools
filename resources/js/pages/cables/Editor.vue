@@ -29,10 +29,18 @@ interface Point {
     y: number;
 }
 
+interface CableType {
+    id: number;
+    church_id: number;
+    name: string;
+    color: string;
+    price_per_m: number;
+}
+
 interface CableRun {
     id: string;
     name: string;
-    type: 'Audio Cat6' | 'Audio XLR' | 'Audio Speaker' | 'Video Cat6' | 'HDMI' | 'SDI' | 'Network Cat6';
+    type: string;
     color: string;
     points: Point[];
     notes?: string;
@@ -56,6 +64,7 @@ interface CablePlan {
 
 const props = defineProps<{
     plan: CablePlan;
+    cableTypes: CableType[];
 }>();
 
 // Editor modes: 'select' (idle), 'draw' (placing path points), 'calibrate' (defining scale ruler)
@@ -101,17 +110,33 @@ const submitUpload = () => {
 // Cable creation state
 const newCableForm = ref({
     name: '',
-    type: 'Audio XLR' as CableRun['type'],
-    color: '#3B82F6',
+    type: props.cableTypes[0]?.name || '',
+    color: props.cableTypes[0]?.color || '#3B82F6',
     notes: '',
 });
+
+const onNewCableTypeChange = () => {
+    const selected = props.cableTypes.find(t => t.name === newCableForm.value.type);
+    if (selected) {
+        newCableForm.value.color = selected.color;
+    }
+};
+
+const onActiveCableTypeChange = () => {
+    if (activeCable.value) {
+        const selected = props.cableTypes.find(t => t.name === activeCable.value.type);
+        if (selected) {
+            activeCable.value.color = selected.color;
+        }
+    }
+};
 
 const addCableRun = () => {
     const id = 'cable_' + Date.now();
     const newCable: CableRun = {
         id,
         name: newCableForm.value.name || `Cable Run #${cablesList.value.length + 1}`,
-        type: newCableForm.value.type,
+        type: newCableForm.value.type || props.cableTypes[0]?.name || '',
         color: newCableForm.value.color,
         points: [],
         notes: newCableForm.value.notes,
@@ -122,11 +147,46 @@ const addCableRun = () => {
     showCreateCableModal.value = false;
     newCableForm.value = {
         name: '',
-        type: 'Audio XLR',
-        color: '#3B82F6',
+        type: props.cableTypes[0]?.name || '',
+        color: props.cableTypes[0]?.color || '#3B82F6',
         notes: '',
     };
     editorMode.value = 'draw';
+};
+
+// Cable Types Management State & Handlers
+const showManageTypesModal = ref(false);
+const typeForm = useForm({
+    name: '',
+    color: '#3B82F6',
+    price_per_m: 1.00,
+});
+
+const addCableType = () => {
+    typeForm.post('/cable-types', {
+        preserveScroll: true,
+        onSuccess: () => {
+            typeForm.reset();
+        }
+    });
+};
+
+const updateCableType = (type: CableType) => {
+    useForm({
+        name: type.name,
+        color: type.color,
+        price_per_m: type.price_per_m,
+    }).put(`/cable-types/${type.id}`, {
+        preserveScroll: true,
+    });
+};
+
+const deleteCableType = (id: number) => {
+    if (confirm('Delete this cable type? Any drawn cable runs using this type will remain but cost calculations will show $0.00.')) {
+        useForm({}).delete(`/cable-types/${id}`, {
+            preserveScroll: true,
+        });
+    }
 };
 
 const deleteCableRun = (id: string) => {
@@ -294,21 +354,55 @@ const calculateRunRawLength = (cable: CableRun) => {
     return len + (2 * (planRoomHeight.value || 3.5));
 };
 
+const getCableTypePrice = (typeName: string) => {
+    const type = props.cableTypes.find(t => t.name === typeName);
+    return type ? type.price_per_m : 0;
+};
+
+const calculateRunCost = (cable: CableRun) => {
+    return calculateRunLength(cable) * getCableTypePrice(cable.type);
+};
+
 // Summarize requirements by cable type
 const totalsByType = computed(() => {
-    const totals: Record<CableRun['type'], number> = {
-        'Audio Cat6': 0,
-        'Audio XLR': 0,
-        'Audio Speaker': 0,
-        'Video Cat6': 0,
-        'HDMI': 0,
-        'SDI': 0,
-        'Network Cat6': 0,
-    };
-    cablesList.value.forEach(c => {
-        totals[c.type] += calculateRunLength(c);
+    const totals: Record<string, { length: number; price_per_m: number; color: string; cost: number }> = {};
+    
+    props.cableTypes.forEach(t => {
+        totals[t.name] = {
+            length: 0,
+            price_per_m: t.price_per_m,
+            color: t.color,
+            cost: 0,
+        };
     });
+
+    cablesList.value.forEach(c => {
+        const len = calculateRunLength(c);
+        if (totals[c.type]) {
+            totals[c.type].length += len;
+            totals[c.type].cost += len * totals[c.type].price_per_m;
+        } else {
+            if (!totals[c.type]) {
+                totals[c.type] = {
+                    length: 0,
+                    price_per_m: 0,
+                    color: c.color || '#9ca3af',
+                    cost: 0,
+                };
+            }
+            totals[c.type].length += len;
+        }
+    });
+
     return totals;
+});
+
+const grandTotalCost = computed(() => {
+    let sum = 0;
+    Object.values(totalsByType.value).forEach(t => {
+        sum += t.cost;
+    });
+    return sum;
 });
 
 // Canvas click listener to place vertex or ruler calibration point
@@ -391,13 +485,15 @@ const savePlan = () => {
 // CSV Bill of Materials Export
 const exportBOM = () => {
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Cable ID,Cable Name,Cable Type,Color,Quantity,Raw Single Length,Slack Percentage,Total Length (with Slack),Unit,Notes\r\n";
+    csvContent += "Cable ID,Cable Name,Cable Type,Color,Quantity,Raw Single Length,Slack Percentage,Total Length (with Slack),Unit,Price per unit,Total Cost,Notes\r\n";
     
     cablesList.value.forEach(c => {
         const raw = calculateRunRawLength(c).toFixed(2);
         const tot = calculateRunLength(c).toFixed(2);
         const qty = c.qty || 1;
-        csvContent += `"${c.id}","${c.name}","${c.type}","${c.color}",${qty},${raw},${planSlackPercent.value}%,${tot},"${planScaleUnit.value}","${c.notes || ''}"\r\n`;
+        const price = getCableTypePrice(c.type);
+        const cost = (parseFloat(tot) * price).toFixed(2);
+        csvContent += `"${c.id}","${c.name}","${c.type}","${c.color}",${qty},${raw},${planSlackPercent.value}%,${tot},"${planScaleUnit.value}","$${price.toFixed(2)}","$${cost}","${c.notes || ''}"\r\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
@@ -532,14 +628,24 @@ defineOptions({
                             <Layers class="size-4.5 text-primary" />
                             <h3 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Cable Runs</h3>
                         </div>
-                        <Button 
-                            @click="showCreateCableModal = true"
-                            size="sm" 
-                            variant="ghost" 
-                            class="h-7 px-2 hover:bg-muted text-primary rounded-lg text-xs"
-                        >
-                            <Plus class="size-3.5 mr-1" /> Add
-                        </Button>
+                        <div class="flex items-center gap-1">
+                            <Button 
+                                @click="showManageTypesModal = true"
+                                size="sm" 
+                                variant="ghost" 
+                                class="h-7 px-2 hover:bg-muted text-muted-foreground rounded-lg text-[10px]"
+                            >
+                                <Settings class="size-3 mr-1" /> Types
+                            </Button>
+                            <Button 
+                                @click="showCreateCableModal = true"
+                                size="sm" 
+                                variant="ghost" 
+                                class="h-7 px-2 hover:bg-muted text-primary rounded-lg text-[10px]"
+                            >
+                                <Plus class="size-3.5 mr-1" /> Add
+                            </Button>
+                        </div>
                     </div>
 
                     <div class="space-y-2.5 max-h-[250px] overflow-y-auto">
@@ -558,10 +664,13 @@ defineOptions({
                                 </div>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
-                                <span class="text-xs font-bold text-foreground">{{ calculateRunLength(cable).toFixed(1) }}{{ planScaleUnit }}</span>
+                                <div class="text-right">
+                                    <span class="text-xs font-bold text-foreground block">{{ calculateRunLength(cable).toFixed(1) }}{{ planScaleUnit }}</span>
+                                    <span v-if="getCableTypePrice(cable.type) > 0" class="text-[9px] text-muted-foreground block font-medium">${{ calculateRunCost(cable).toFixed(2) }}</span>
+                                </div>
                                 <button 
                                     @click.stop="deleteCableRun(cable.id)"
-                                    class="text-muted-foreground hover:text-red-500 cursor-pointer"
+                                    class="text-muted-foreground hover:text-red-500 cursor-pointer animate-none"
                                 >
                                     <Trash2 class="size-3.5" />
                                 </button>
@@ -573,24 +682,60 @@ defineOptions({
                     </div>
                 </div>
 
-                <!-- 3. Active Cable Run Points -->
+                <!-- 3. Active Cable Run Details -->
                 <div class="bg-card border border-border/60 rounded-2xl p-5 space-y-4 shadow-sm">
                     <div class="flex items-center gap-2 border-b border-border/40 pb-3">
                         <Edit3 class="size-4.5 text-primary" />
-                        <h3 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Cable path points</h3>
+                        <h3 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Cable Run Details</h3>
                     </div>
 
                     <div v-if="activeCable" class="space-y-4">
                         <div class="space-y-1.5">
                             <span class="text-[10px] uppercase font-bold text-muted-foreground block">Active Cable</span>
                             <div class="font-bold text-sm text-foreground">{{ activeCable.name }}</div>
-                            <div class="text-[10px] text-[#1AC18C] font-semibold bg-[#1AC18C]/10 px-2 py-0.5 rounded-full inline-block">
-                                Total: {{ calculateRunLength(activeCable).toFixed(1) }}{{ planScaleUnit }} (with slack)
+                            <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <div class="text-[10px] text-[#1AC18C] font-semibold bg-[#1AC18C]/10 px-2 py-0.5 rounded-full inline-block">
+                                    Total: {{ calculateRunLength(activeCable).toFixed(1) }}{{ planScaleUnit }}
+                                </div>
+                                <div v-if="getCableTypePrice(activeCable.type) > 0" class="text-[10px] text-primary font-semibold bg-primary/10 px-2 py-0.5 rounded-full inline-block">
+                                    Cost: ${{ calculateRunCost(activeCable).toFixed(2) }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Properties Card -->
+                        <div class="space-y-3.5 p-3.5 bg-muted/40 rounded-xl border border-border/40">
+                            <div class="space-y-1">
+                                <Label class="text-[10px] uppercase font-bold text-muted-foreground">Cable Name</Label>
+                                <Input v-model="activeCable.name" class="rounded-xl h-8 px-2 text-xs bg-card" />
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div class="space-y-1">
+                                    <Label class="text-[10px] uppercase font-bold text-muted-foreground">Cable Type</Label>
+                                    <select v-model="activeCable.type" @change="onActiveCableTypeChange" class="flex h-8 w-full rounded-xl border border-input bg-card px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                                        <option v-for="type in cableTypes" :key="type.id" :value="type.name">
+                                            {{ type.name }} (${{ type.price_per_m.toFixed(2) }}/{{ planScaleUnit }})
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1">
+                                    <Label class="text-[10px] uppercase font-bold text-muted-foreground">Color Accent</Label>
+                                    <div class="flex items-center gap-1.5">
+                                        <Input type="color" v-model="activeCable.color" class="rounded-xl h-8 p-1 cursor-pointer bg-card w-10 shrink-0 border border-input" />
+                                        <span class="text-[9px] text-muted-foreground font-mono truncate uppercase">{{ activeCable.color }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <Label class="text-[10px] uppercase font-bold text-muted-foreground">Notes</Label>
+                                <textarea v-model="activeCable.notes" rows="2" class="flex w-full rounded-xl border border-input bg-card px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80" placeholder="e.g. conduit section..."></textarea>
                             </div>
                         </div>
 
                         <!-- Quantity control & Path Duplication -->
-                        <div class="grid grid-cols-2 gap-2.5 items-end p-3 bg-muted/40 rounded-xl border border-border/40">
+                        <div class="grid grid-cols-2 gap-2.5 items-end p-3.5 bg-muted/40 rounded-xl border border-border/40">
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Quantity</Label>
                                 <Input type="number" min="1" v-model.number="activeCable.qty" class="rounded-xl h-8 px-2 text-xs bg-card" />
@@ -638,17 +783,32 @@ defineOptions({
                 <div class="bg-card border border-border/60 rounded-2xl p-5 space-y-4 shadow-sm">
                     <div class="flex items-center gap-2 border-b border-border/40 pb-3">
                         <Tag class="size-4.5 text-primary" />
-                        <h3 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Material Lengths Summary</h3>
+                        <h3 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Material Cost & Lengths</h3>
                     </div>
 
-                    <div class="space-y-2">
+                    <div class="space-y-2.5">
                         <div 
-                            v-for="(len, type) in totalsByType" 
+                            v-for="(info, type) in totalsByType" 
                             :key="type"
-                            class="flex justify-between items-center py-1.5 border-b border-border/20 text-xs"
+                            class="flex justify-between items-start py-1.5 border-b border-border/20 text-xs"
                         >
-                            <span class="font-semibold text-foreground">{{ type }}</span>
-                            <span class="font-bold text-primary">{{ len.toFixed(1) }}{{ planScaleUnit }}</span>
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="size-2.5 rounded-full shrink-0" :style="{ backgroundColor: info.color }"></span>
+                                <div class="min-w-0">
+                                    <span class="font-semibold text-foreground block truncate" :title="type">{{ type }}</span>
+                                    <span class="text-[9px] text-muted-foreground block font-medium">${{ info.price_per_m.toFixed(2) }}/{{ planScaleUnit }}</span>
+                                </div>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <span class="font-bold text-foreground block">{{ info.length.toFixed(1) }}{{ planScaleUnit }}</span>
+                                <span v-if="info.cost > 0" class="text-[10px] font-bold text-[#1AC18C] block">${{ info.cost.toFixed(2) }}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Grand Total Cost -->
+                        <div v-if="grandTotalCost > 0" class="flex justify-between items-center pt-2.5 border-t border-double border-primary/30 text-xs">
+                            <span class="font-bold text-foreground uppercase tracking-wider text-[10px]">Grand Total Cost</span>
+                            <span class="font-black text-sm text-[#1AC18C]">${{ grandTotalCost.toFixed(2) }}</span>
                         </div>
                     </div>
                 </div>
@@ -852,14 +1012,10 @@ defineOptions({
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1.5">
                             <Label for="cable-type">Cable Type</Label>
-                            <select id="cable-type" v-model="newCableForm.type" class="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                                <option value="Audio Cat6">Audio Cat6</option>
-                                <option value="Audio XLR">Audio XLR</option>
-                                <option value="Audio Speaker">Audio Speaker</option>
-                                <option value="Video Cat6">Video Cat6</option>
-                                <option value="HDMI">HDMI</option>
-                                <option value="SDI">SDI</option>
-                                <option value="Network Cat6">Network Cat6</option>
+                            <select id="cable-type" v-model="newCableForm.type" @change="onNewCableTypeChange" class="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                                <option v-for="type in cableTypes" :key="type.id" :value="type.name">
+                                    {{ type.name }} (${{ type.price_per_m.toFixed(2) }}/{{ planScaleUnit }})
+                                </option>
                             </select>
                         </div>
                         <div class="space-y-1.5">
@@ -889,6 +1045,106 @@ defineOptions({
                         <Button type="submit" class="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl cursor-pointer">Add Cable</Button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- MODAL: Manage Cable Types -->
+        <div v-if="showManageTypesModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div class="bg-card border border-border/60 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div class="px-6 py-4 border-b border-border/40 flex items-center justify-between">
+                    <h3 class="font-bold text-lg text-foreground flex items-center gap-2">
+                        <Settings class="size-5 text-primary" />
+                        Manage Cable Types & Pricing
+                    </h3>
+                    <button @click="showManageTypesModal = false" class="text-muted-foreground hover:text-foreground text-xl leading-none cursor-pointer">&times;</button>
+                </div>
+
+                <div class="p-6 space-y-6">
+                    <!-- Current Types List Table -->
+                    <div class="space-y-2">
+                        <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Configured Cable Types</h4>
+                        <div class="border border-border/40 rounded-xl overflow-hidden bg-muted/20 max-h-[220px] overflow-y-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="border-b border-border/40 bg-muted/40 text-[10px] uppercase font-bold text-muted-foreground">
+                                        <th class="p-3">Type Name</th>
+                                        <th class="p-3 w-28">Color</th>
+                                        <th class="p-3 w-32">Price per {{ planScaleUnit }}</th>
+                                        <th class="p-3 w-24 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="type in cableTypes" :key="type.id" class="border-b border-border/20 last:border-0 hover:bg-muted/10">
+                                        <td class="p-3">
+                                            <Input v-model="type.name" class="h-8 px-2 text-xs rounded-lg bg-card" />
+                                        </td>
+                                        <td class="p-3">
+                                            <div class="flex items-center gap-2">
+                                                <Input type="color" v-model="type.color" class="h-8 p-1 cursor-pointer w-10 shrink-0 border border-input rounded-lg bg-card" />
+                                                <span class="text-[10px] text-muted-foreground font-mono uppercase">{{ type.color }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="p-3">
+                                            <Input type="number" step="0.01" min="0" v-model.number="type.price_per_m" class="h-8 px-2 text-xs rounded-lg bg-card" />
+                                        </td>
+                                        <td class="p-3 text-right">
+                                            <div class="flex justify-end gap-1.5">
+                                                <Button 
+                                                    @click="updateCableType(type)"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    class="h-8 px-2 bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary font-bold text-[10px] rounded-lg cursor-pointer"
+                                                    title="Save changes"
+                                                >
+                                                    Save
+                                                </Button>
+                                                <Button 
+                                                    @click="deleteCableType(type.id)"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="h-8 w-8 p-0 text-muted-foreground hover:text-red-500 rounded-lg cursor-pointer"
+                                                    title="Delete Type"
+                                                >
+                                                    <Trash2 class="size-3.5" />
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="cableTypes.length === 0">
+                                        <td colspan="4" class="p-8 text-center text-muted-foreground italic">No cable types configured.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Add New Type Form -->
+                    <form @submit.prevent="addCableType" class="p-4 bg-muted/30 border border-border/40 rounded-xl space-y-4">
+                        <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Add Custom Cable Type</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="space-y-1.5">
+                                <Label for="t-name" class="text-[10px] uppercase font-bold text-muted-foreground">Type Name</Label>
+                                <Input id="t-name" v-model="typeForm.name" placeholder="e.g. Fiber SM" required class="rounded-xl h-9 text-xs bg-card" />
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label for="t-color" class="text-[10px] uppercase font-bold text-muted-foreground">Default Color</Label>
+                                <div class="flex gap-2 items-center">
+                                    <Input id="t-color" type="color" v-model="typeForm.color" class="rounded-xl h-9 p-1 cursor-pointer w-12 border border-input bg-card" />
+                                    <span class="text-xs text-muted-foreground font-mono uppercase">{{ typeForm.color }}</span>
+                                </div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label for="t-price" class="text-[10px] uppercase font-bold text-muted-foreground">Price per {{ planScaleUnit }}</Label>
+                                <Input id="t-price" type="number" step="0.01" min="0" v-model.number="typeForm.price_per_m" required class="rounded-xl h-9 text-xs bg-card" />
+                            </div>
+                        </div>
+                        <div class="flex justify-end pt-2 border-t border-border/20">
+                            <Button type="submit" :disabled="typeForm.processing" class="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl cursor-pointer text-xs h-9">
+                                {{ typeForm.processing ? 'Adding...' : 'Add Cable Type' }}
+                            </Button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

@@ -190,6 +190,11 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
     // Cable Calculator Module
     Route::resource('cable-plans', CablePlanController::class);
     Route::post('cable-plans/{cable_plan}/upload', [CablePlanController::class, 'upload'])->name('cable-plans.upload');
+
+    // Cable Types API routes
+    Route::post('cable-types', [CablePlanController::class, 'typesStore'])->name('cable-types.store');
+    Route::put('cable-types/{cable_type}', [CablePlanController::class, 'typesUpdate'])->name('cable-types.update');
+    Route::delete('cable-types/{cable_type}', [CablePlanController::class, 'typesDestroy'])->name('cable-types.destroy');
 });
 
 // Public Guest Route for Shared Shopping Lists

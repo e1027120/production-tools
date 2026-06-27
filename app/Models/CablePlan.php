@@ -122,20 +122,36 @@ class CablePlan extends Model
     public function getTotalsByTypeAttribute(): array
     {
         $cablesList = $this->cables ?? [];
-        $totals = [
-            'Audio Cat6' => 0.0,
-            'Audio XLR' => 0.0,
-            'Audio Speaker' => 0.0,
-            'Video Cat6' => 0.0,
-            'HDMI' => 0.0,
-            'SDI' => 0.0,
-            'Network Cat6' => 0.0,
-        ];
+        $types = CableType::getForChurch($this->church_id);
+
+        $totals = [];
+        foreach ($types as $type) {
+            $totals[$type->name] = [
+                'length' => 0.0,
+                'price_per_m' => (float) $type->price_per_m,
+                'color' => $type->color,
+                'cost' => 0.0,
+            ];
+        }
 
         foreach ($cablesList as $cable) {
-            $type = $cable['type'] ?? '';
-            if (array_key_exists($type, $totals)) {
-                $totals[$type] += $this->calculateCableLength($cable);
+            $typeName = $cable['type'] ?? '';
+            if (array_key_exists($typeName, $totals)) {
+                $len = $this->calculateCableLength($cable);
+                $totals[$typeName]['length'] += $len;
+                $totals[$typeName]['cost'] += $len * $totals[$typeName]['price_per_m'];
+            } elseif (! empty($typeName)) {
+                // Handle any legacy or deleted type strings as fallback
+                if (! array_key_exists($typeName, $totals)) {
+                    $totals[$typeName] = [
+                        'length' => 0.0,
+                        'price_per_m' => 0.0,
+                        'color' => $cable['color'] ?? '#9ca3af',
+                        'cost' => 0.0,
+                    ];
+                }
+                $len = $this->calculateCableLength($cable);
+                $totals[$typeName]['length'] += $len;
             }
         }
 
