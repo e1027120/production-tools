@@ -62,7 +62,7 @@ defineOptions({
                     autocomplete="email"
                     name="email"
                     placeholder="email@example.com"
-                    :value="email"
+                    :defaultValue="email"
                     :readonly="!!email"
                     :class="{ 'bg-muted text-muted-foreground select-none pointer-events-none': !!email }"
                 />
