@@ -963,7 +963,7 @@ const downloadSVG = () => {
             <!-- Center Drawing Canvas Area -->
             <div 
                 ref="workspaceContainer"
-                class="flex-1 overflow-auto p-8 flex justify-center items-start relative select-none"
+                class="flex-1 overflow-auto p-12 flex justify-start items-start relative select-none"
                 @click="selectedElementIds = []; saveTextEdit()"
             >
                 <div 
