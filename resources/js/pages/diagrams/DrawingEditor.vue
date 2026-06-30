@@ -963,19 +963,27 @@ const downloadSVG = () => {
             <!-- Center Drawing Canvas Area -->
             <div 
                 ref="workspaceContainer"
-                class="flex-1 overflow-auto p-12 flex justify-start items-start relative select-none"
+                class="flex-1 overflow-auto p-12 relative select-none"
                 @click="selectedElementIds = []; saveTextEdit()"
             >
+                <!-- Scroll Sizing Wrapper to establish zoomed DOM scroll size -->
                 <div 
-                    ref="canvasContainer"
-                    class="shadow-xl relative select-none border border-border/60 transition-all"
                     :style="{
-                        width: canvasWidth + 'px',
-                        height: canvasHeight + 'px',
-                        backgroundColor: canvasBackground,
-                        zoom: zoom
+                        width: (canvasWidth * zoom) + 'px',
+                        height: (canvasHeight * zoom) + 'px',
+                        position: 'relative'
                     }"
                 >
+                    <div 
+                        ref="canvasContainer"
+                        class="shadow-xl relative select-none border border-border/60 transition-transform origin-top-left"
+                        :style="{
+                            width: canvasWidth + 'px',
+                            height: canvasHeight + 'px',
+                            backgroundColor: canvasBackground,
+                            transform: `scale(${zoom})`
+                        }"
+                    >
                     <!-- Dot Grid Background overlay -->
                     <div 
                         v-if="showGrid" 
@@ -1219,6 +1227,7 @@ const downloadSVG = () => {
                         </svg>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     </div>
