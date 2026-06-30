@@ -15,7 +15,10 @@ import {
     Layers,
     Copy,
     Settings,
-    Download
+    Download,
+    AlignLeft,
+    AlignCenter,
+    AlignRight
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -139,16 +142,76 @@ const submitSave = () => {
     });
 };
 
+const workspaceContainer = ref<HTMLDivElement | null>(null);
+const canvasContainer = ref<HTMLDivElement | null>(null);
+
+// Wheel Zoom Interaction (Cmd + Scroll / Cmd + Trackpad wheel)
+const handleWheel = (event: WheelEvent) => {
+    if (event.metaKey || event.ctrlKey) {
+        event.preventDefault();
+        const step = 0.25;
+        if (event.deltaY < 0) {
+            zoom.value = Math.min(2, zoom.value + step);
+        } else {
+            zoom.value = Math.max(0.25, zoom.value - step);
+        }
+    }
+};
+
+onMounted(() => {
+    if (workspaceContainer.value) {
+        workspaceContainer.value.addEventListener('wheel', handleWheel, { passive: false });
+    }
+});
+
+onUnmounted(() => {
+    if (workspaceContainer.value) {
+        workspaceContainer.value.removeEventListener('wheel', handleWheel);
+    }
+});
+
+// Dynamic viewport coordinate finder to place new shapes exactly in the visible view center
+const getCanvasCenter = (width: number, height: number) => {
+    if (!workspaceContainer.value || !canvasContainer.value) {
+        return { x: 100, y: 100 };
+    }
+    const wsRect = workspaceContainer.value.getBoundingClientRect();
+    const canvasRect = canvasContainer.value.getBoundingClientRect();
+
+    const viewCenterX = wsRect.left + wsRect.width / 2;
+    const viewCenterY = wsRect.top + wsRect.height / 2;
+
+    const relativeX = viewCenterX - canvasRect.left;
+    const relativeY = viewCenterY - canvasRect.top;
+
+    const canvasX = relativeX / zoom.value;
+    const canvasY = relativeY / zoom.value;
+
+    const gridVal = snapToGrid.value ? 5 : 1;
+    const snap = (val: number) => Math.round(val / gridVal) * gridVal;
+
+    return {
+        x: Math.max(0, snap(canvasX - width / 2)),
+        y: Math.max(0, snap(canvasY - height / 2))
+    };
+};
+
 // Add Element helper
 const addElement = (type: DrawingElement['type']) => {
     const id = 'element_' + Math.random().toString(36).substr(2, 9);
+    const width = type === 'line' ? 200 : 150;
+    const height = type === 'line' ? 100 : 100;
+    
+    // Dynamically calculate coordinate offsets based on viewport center
+    const center = getCanvasCenter(width, height);
+
     let newEl: DrawingElement = {
         id,
         type,
-        x: 100,
-        y: 100,
-        width: type === 'line' ? 200 : 150,
-        height: type === 'line' ? 100 : 100,
+        x: center.x,
+        y: center.y,
+        width,
+        height,
         fillColor: type === 'text' ? 'transparent' : '#1AC18C',
         strokeColor: '#22273C',
         strokeWidth: 2,
@@ -165,8 +228,8 @@ const addElement = (type: DrawingElement['type']) => {
         newEl.textColor = '#22273C';
         newEl.textAlignment = 'left';
     } else if (type === 'line') {
-        newEl.x2 = 300;
-        newEl.y2 = 100;
+        newEl.x2 = center.x + 200;
+        newEl.y2 = center.y + 100;
         newEl.lineEnd = 'arrow';
     } else {
         newEl.text = ''; // shapes can have text inside
@@ -709,6 +772,33 @@ const downloadSVG = () => {
                     >
                         I
                     </button>
+
+                    <div class="h-4 w-px bg-border/40 mx-0.5"></div>
+
+                    <button 
+                        @click="selectedElement.textAlignment = 'left'"
+                        class="h-7 px-1.5 border border-border rounded-lg bg-card flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                        :class="{ 'bg-primary/10 text-primary border-primary/20': selectedElement.textAlignment === 'left' }"
+                        title="Align Left"
+                    >
+                        <AlignLeft class="size-3.5" />
+                    </button>
+                    <button 
+                        @click="selectedElement.textAlignment = 'center'"
+                        class="h-7 px-1.5 border border-border rounded-lg bg-card flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                        :class="{ 'bg-primary/10 text-primary border-primary/20': selectedElement.textAlignment === 'center' }"
+                        title="Align Center"
+                    >
+                        <AlignCenter class="size-3.5" />
+                    </button>
+                    <button 
+                        @click="selectedElement.textAlignment = 'right'"
+                        class="h-7 px-1.5 border border-border rounded-lg bg-card flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                        :class="{ 'bg-primary/10 text-primary border-primary/20': selectedElement.textAlignment === 'right' }"
+                        title="Align Right"
+                    >
+                        <AlignRight class="size-3.5" />
+                    </button>
                 </div>
 
                 <div class="h-4 w-px bg-border/40 mx-0.5"></div>
@@ -872,10 +962,12 @@ const downloadSVG = () => {
 
             <!-- Center Drawing Canvas Area -->
             <div 
+                ref="workspaceContainer"
                 class="flex-1 overflow-auto p-8 flex justify-center items-start relative select-none"
                 @click="selectedElementIds = []; saveTextEdit()"
             >
                 <div 
+                    ref="canvasContainer"
                     class="shadow-xl relative select-none border border-border/60 transition-all"
                     :style="{
                         width: canvasWidth + 'px',
