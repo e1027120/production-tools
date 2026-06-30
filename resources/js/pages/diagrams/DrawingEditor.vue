@@ -18,7 +18,8 @@ import {
     Download,
     AlignLeft,
     AlignCenter,
-    AlignRight
+    AlignRight,
+    Upload
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -599,6 +600,277 @@ const downloadSVG = () => {
     document.body.removeChild(downloadLink);
 };
 
+// SVG Importing Interactions
+const triggerSVGImport = () => {
+    const fileInput = document.getElementById('import-svg-file');
+    if (fileInput) fileInput.click();
+};
+
+const handleSVGImport = (event: Event) => {
+    const fileInput = event.target as HTMLInputElement;
+    if (!fileInput.files || fileInput.files.length === 0) return;
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+        const text = e.target?.result as string;
+        if (!text) return;
+
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, 'image/svg+xml');
+            
+            const parserError = doc.querySelector('parsererror');
+            if (parserError) {
+                alert('Invalid SVG file format');
+                return;
+            }
+
+            const svgElement = doc.querySelector('svg');
+            if (!svgElement) return;
+
+            // Set canvas size from SVG attributes if defined
+            const viewBox = svgElement.getAttribute('viewBox');
+            if (viewBox) {
+                const parts = viewBox.split(/[\s,]+/).map(Number);
+                if (parts.length === 4) {
+                    canvasWidth.value = parts[2];
+                    canvasHeight.value = parts[3];
+                }
+            } else {
+                const widthAttr = svgElement.getAttribute('width');
+                const heightAttr = svgElement.getAttribute('height');
+                if (widthAttr && heightAttr) {
+                    canvasWidth.value = parseInt(widthAttr, 10);
+                    canvasHeight.value = parseInt(heightAttr, 10);
+                }
+            }
+
+            const styleAttr = svgElement.getAttribute('style');
+            if (styleAttr) {
+                const bgMatch = styleAttr.match(/background-color:\s*(#[a-fA-F0-9]{3,8}|[a-zA-Z]+)/);
+                if (bgMatch) {
+                    canvasBackground.value = bgMatch[1];
+                }
+            }
+
+            const newElements: DrawingElement[] = [];
+            const makeId = (type: string) => type + '_' + Math.random().toString(36).substr(2, 9);
+
+            // 1. Rectangles
+            const rects = doc.querySelectorAll('rect');
+            rects.forEach(rect => {
+                const x = parseFloat(rect.getAttribute('x') || '0');
+                const y = parseFloat(rect.getAttribute('y') || '0');
+                const width = parseFloat(rect.getAttribute('width') || '100');
+                const height = parseFloat(rect.getAttribute('height') || '100');
+                const fill = rect.getAttribute('fill') || '#1AC18C';
+                const stroke = rect.getAttribute('stroke') || '#22273C';
+                const strokeWidth = parseFloat(rect.getAttribute('stroke-width') || '2');
+                const dash = rect.getAttribute('stroke-dasharray');
+                const isDashed = dash && dash !== '0' && dash !== 'none';
+
+                let textContent = '';
+                let textColor = '#1E293B';
+                let fontSize = 14;
+                let fontWeight: 'normal' | 'bold' = 'normal';
+                let fontStyle: 'normal' | 'italic' = 'normal';
+                let textAlignment: 'left' | 'center' | 'right' = 'center';
+
+                const parentG = rect.parentElement;
+                if (parentG && parentG.tagName.toLowerCase() === 'g') {
+                    const fo = parentG.querySelector('foreignObject');
+                    if (fo) {
+                        const p = fo.querySelector('p');
+                        if (p) textContent = p.textContent || '';
+                        
+                        const textDiv = fo.querySelector('div');
+                        if (textDiv) {
+                            textColor = textDiv.style.color || textColor;
+                            fontSize = parseInt(textDiv.style.fontSize, 10) || fontSize;
+                            fontWeight = (textDiv.style.fontWeight === 'bold') ? 'bold' : 'normal';
+                            fontStyle = (textDiv.style.fontStyle === 'italic') ? 'italic' : 'normal';
+                            textAlignment = (textDiv.style.textAlign as any) || textAlignment;
+                        }
+                    }
+                }
+
+                const isTextOnly = fill === 'transparent' || fill === 'none';
+
+                newElements.push({
+                    id: makeId(isTextOnly ? 'text' : 'rectangle'),
+                    type: isTextOnly ? 'text' : 'rectangle',
+                    x,
+                    y,
+                    width,
+                    height,
+                    fillColor: fill,
+                    strokeColor: stroke,
+                    strokeWidth,
+                    strokeStyle: isDashed ? 'dashed' : 'solid',
+                    text: textContent,
+                    textColor,
+                    fontSize,
+                    fontWeight,
+                    fontStyle,
+                    textAlignment
+                });
+            });
+
+            // 2. Circles / Ellipses
+            const ellipses = doc.querySelectorAll('ellipse');
+            ellipses.forEach(el => {
+                const cx = parseFloat(el.getAttribute('cx') || '0');
+                const cy = parseFloat(el.getAttribute('cy') || '0');
+                const rx = parseFloat(el.getAttribute('rx') || '50');
+                const ry = parseFloat(el.getAttribute('ry') || '50');
+                const fill = el.getAttribute('fill') || '#1AC18C';
+                const stroke = el.getAttribute('stroke') || '#22273C';
+                const strokeWidth = parseFloat(el.getAttribute('stroke-width') || '2');
+                const dash = el.getAttribute('stroke-dasharray');
+                const isDashed = dash && dash !== '0' && dash !== 'none';
+
+                newElements.push({
+                    id: makeId('circle'),
+                    type: 'circle',
+                    x: cx - rx,
+                    y: cy - ry,
+                    width: rx * 2,
+                    height: ry * 2,
+                    fillColor: fill,
+                    strokeColor: stroke,
+                    strokeWidth,
+                    strokeStyle: isDashed ? 'dashed' : 'solid',
+                    textColor: '#1E293B',
+                    fontSize: 14,
+                    fontWeight: 'normal',
+                    fontStyle: 'normal',
+                    textAlignment: 'center'
+                });
+            });
+
+            // 3. Polygons
+            const polygons = doc.querySelectorAll('polygon');
+            polygons.forEach(poly => {
+                const pointsAttr = poly.getAttribute('points') || '';
+                const pointPairs = pointsAttr.trim().split(/[\s,]+/).filter(Boolean);
+                
+                const fill = poly.getAttribute('fill') || '#1AC18C';
+                const stroke = poly.getAttribute('stroke') || '#22273C';
+                const strokeWidth = parseFloat(poly.getAttribute('stroke-width') || '2');
+                const dash = poly.getAttribute('stroke-dasharray');
+                const isDashed = dash && dash !== '0' && dash !== 'none';
+
+                if (poly.parentElement?.tagName.toLowerCase() === 'marker') return;
+
+                if (pointPairs.length === 6) {
+                    const coords = pointPairs.map(Number);
+                    const xs = [coords[0], coords[2], coords[4]];
+                    const ys = [coords[1], coords[3], coords[5]];
+                    const minX = Math.min(...xs);
+                    const maxX = Math.max(...xs);
+                    const minY = Math.min(...ys);
+                    const maxY = Math.max(...ys);
+
+                    newElements.push({
+                        id: makeId('triangle'),
+                        type: 'triangle',
+                        x: minX,
+                        y: minY,
+                        width: maxX - minX,
+                        height: maxY - minY,
+                        fillColor: fill,
+                        strokeColor: stroke,
+                        strokeWidth,
+                        strokeStyle: isDashed ? 'dashed' : 'solid',
+                        textColor: '#1E293B',
+                        fontSize: 14,
+                        fontWeight: 'normal',
+                        fontStyle: 'normal',
+                        textAlignment: 'center'
+                    });
+                } else if (pointPairs.length === 20) {
+                    const coords = pointPairs.map(Number);
+                    const xs = coords.filter((_, i) => i % 2 === 0);
+                    const ys = coords.filter((_, i) => i % 2 === 1);
+                    const minX = Math.min(...xs);
+                    const maxX = Math.max(...xs);
+                    const minY = Math.min(...ys);
+                    const maxY = Math.max(...ys);
+
+                    newElements.push({
+                        id: makeId('star'),
+                        type: 'star',
+                        x: minX,
+                        y: minY,
+                        width: maxX - minX,
+                        height: maxY - minY,
+                        fillColor: fill,
+                        strokeColor: stroke,
+                        strokeWidth,
+                        strokeStyle: isDashed ? 'dashed' : 'solid',
+                        textColor: '#1E293B',
+                        fontSize: 14,
+                        fontWeight: 'normal',
+                        fontStyle: 'normal',
+                        textAlignment: 'center'
+                    });
+                }
+            });
+
+            // 4. Lines
+            const lines = doc.querySelectorAll('line');
+            lines.forEach(line => {
+                const x1 = parseFloat(line.getAttribute('x1') || '0');
+                const y1 = parseFloat(line.getAttribute('y1') || '0');
+                const x2 = parseFloat(line.getAttribute('x2') || '100');
+                const y2 = parseFloat(line.getAttribute('y2') || '100');
+                const stroke = line.getAttribute('stroke') || '#22273C';
+                const strokeWidth = parseFloat(line.getAttribute('stroke-width') || '2');
+                const dash = line.getAttribute('stroke-dasharray');
+                const isDashed = dash && dash !== '0' && dash !== 'none';
+                const markerEnd = line.getAttribute('marker-end');
+                const hasArrow = markerEnd && markerEnd !== 'none';
+
+                newElements.push({
+                    id: makeId('line'),
+                    type: 'line',
+                    x: x1,
+                    y: y1,
+                    x2: x2,
+                    y2: x2,
+                    width: Math.abs(x2 - x1),
+                    height: Math.abs(y2 - y1),
+                    fillColor: 'transparent',
+                    strokeColor: stroke,
+                    strokeWidth,
+                    strokeStyle: isDashed ? 'dashed' : 'solid',
+                    lineEnd: hasArrow ? 'arrow' : 'none',
+                    textColor: '#1E293B',
+                    fontSize: 14,
+                    fontWeight: 'normal',
+                    fontStyle: 'normal',
+                    textAlignment: 'center'
+                });
+            });
+
+            if (newElements.length > 0) {
+                elements.value = [...elements.value, ...newElements];
+            } else {
+                alert('No compatible vector shapes found in the SVG');
+            }
+
+        } catch (err) {
+            console.error(err);
+            alert('Failed to read or parse SVG data');
+        }
+    };
+
+    reader.readAsText(file);
+    fileInput.value = '';
+};
+
 </script>
 
 <template>
@@ -880,6 +1152,23 @@ const downloadSVG = () => {
                         +
                     </button>
                 </div>
+
+                <!-- Import SVG Trigger -->
+                <input 
+                    type="file" 
+                    id="import-svg-file" 
+                    accept=".svg" 
+                    class="hidden" 
+                    @change="handleSVGImport"
+                />
+                <Button 
+                    @click="triggerSVGImport" 
+                    variant="outline"
+                    class="rounded-xl text-xs h-8 border-border/60 hover:bg-muted/40 cursor-pointer mr-1"
+                    title="Import shapes from vector SVG file"
+                >
+                    <Upload class="size-3.5 mr-1" /> Import SVG
+                </Button>
 
                 <Button 
                     @click="downloadSVG" 
