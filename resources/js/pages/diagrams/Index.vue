@@ -9,7 +9,8 @@ import {
     User, 
     ArrowRight, 
     FileText,
-    Activity
+    Activity,
+    Palette
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ import InputError from '@/components/InputError.vue';
 interface Diagram {
     id: number;
     name: string;
+    type: string;
     description: string | null;
     created_by: string;
     created_at: string;
@@ -32,6 +34,7 @@ const showCreateModal = ref(false);
 
 const form = useForm({
     name: '',
+    type: 'blueprint',
     description: '',
 });
 
@@ -103,9 +106,9 @@ const formatDate = (isoString: string) => {
                 <div class="absolute -right-4 -top-4 size-20 rounded-full bg-primary/5 group-hover:scale-125 transition-transform duration-500 blur-xl"></div>
 
                 <div class="space-y-2 relative">
-                    <div class="flex items-center gap-1.5 text-primary">
-                        <FileText class="size-4" />
-                        <span class="text-[9px] font-bold uppercase tracking-wider">Technical Blueprint</span>
+                    <div class="flex items-center gap-1.5" :class="d.type === 'drawing' ? 'text-violet-500 dark:text-violet-400' : 'text-primary'">
+                        <component :is="d.type === 'drawing' ? Palette : FileText" class="size-4 shrink-0" />
+                        <span class="text-[9px] font-bold uppercase tracking-wider">{{ d.type === 'drawing' ? 'Free Drawing' : 'Technical Blueprint' }}</span>
                     </div>
                     <h3 class="font-bold text-base text-foreground leading-snug group-hover:text-primary transition-colors">{{ d.name }}</h3>
                     <p class="text-xs text-muted-foreground line-clamp-2 h-8">{{ d.description || 'No description provided.' }}</p>
@@ -148,19 +151,19 @@ const formatDate = (isoString: string) => {
             <div class="bg-card border border-border/60 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 <div class="px-6 py-4 border-b border-border/40 flex items-center justify-between">
                     <h3 class="font-bold text-lg text-foreground flex items-center gap-2">
-                        <Network class="size-5 text-primary" />
-                        New Technical Blueprint
+                        <component :is="form.type === 'drawing' ? Palette : Network" class="size-5 text-primary" />
+                        {{ form.type === 'drawing' ? 'New Free Drawing' : 'New Technical Blueprint' }}
                     </h3>
                     <button @click="showCreateModal = false" class="text-muted-foreground hover:text-foreground text-xl leading-none cursor-pointer">&times;</button>
                 </div>
 
                 <form @submit.prevent="submitCreate" class="p-6 space-y-4">
                     <div class="space-y-1.5">
-                        <Label for="d-name">Diagram Name</Label>
+                        <Label for="d-name">Name</Label>
                         <Input 
                             id="d-name"
                             v-model="form.name"
-                            placeholder="e.g. FOH to Stage Signal Flow"
+                            :placeholder="form.type === 'drawing' ? 'e.g. Sanctuary Stage Layout' : 'e.g. FOH to Stage Signal Flow'"
                             required
                             class="rounded-xl"
                         />
@@ -168,11 +171,43 @@ const formatDate = (isoString: string) => {
                     </div>
 
                     <div class="space-y-1.5">
+                        <Label class="text-xs font-semibold">Document Type</Label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label 
+                                class="flex items-center gap-2.5 p-3 rounded-xl border border-border bg-card cursor-pointer hover:border-primary/50 transition-colors"
+                                :class="{ 'border-primary bg-primary/5': form.type === 'blueprint' }"
+                            >
+                                <input type="radio" v-model="form.type" value="blueprint" class="sr-only" />
+                                <div class="size-4 rounded-full border border-input flex items-center justify-center shrink-0">
+                                    <div class="size-2 rounded-full bg-primary" v-if="form.type === 'blueprint'"></div>
+                                </div>
+                                <div class="min-w-0">
+                                    <span class="font-bold text-xs block text-foreground">Blueprint</span>
+                                    <span class="text-[9px] text-muted-foreground block truncate">Network & signals</span>
+                                </div>
+                            </label>
+                            <label 
+                                class="flex items-center gap-2.5 p-3 rounded-xl border border-border bg-card cursor-pointer hover:border-primary/50 transition-colors"
+                                :class="{ 'border-primary bg-primary/5': form.type === 'drawing' }"
+                            >
+                                <input type="radio" v-model="form.type" value="drawing" class="sr-only" />
+                                <div class="size-4 rounded-full border border-input flex items-center justify-center shrink-0">
+                                    <div class="size-2 rounded-full bg-primary" v-if="form.type === 'drawing'"></div>
+                                </div>
+                                <div class="min-w-0">
+                                    <span class="font-bold text-xs block text-foreground">Free Drawing</span>
+                                    <span class="text-[9px] text-muted-foreground block truncate">Shapes & vectors</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
                         <Label for="d-desc">Description</Label>
                         <textarea 
                             id="d-desc"
                             v-model="form.description"
-                            placeholder="Briefly describe what setup this diagram blueprints..."
+                            :placeholder="form.type === 'drawing' ? 'Briefly describe what this drawing layout documents...' : 'Briefly describe what setup this diagram blueprints...'"
                             rows="3"
                             class="flex w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
                         ></textarea>
@@ -182,7 +217,7 @@ const formatDate = (isoString: string) => {
                     <div class="flex justify-end gap-2 pt-2 border-t border-border/40">
                         <Button type="button" @click="showCreateModal = false" variant="outline" class="rounded-xl cursor-pointer">Cancel</Button>
                         <Button type="submit" :disabled="form.processing" class="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl cursor-pointer">
-                            {{ form.processing ? 'Creating...' : 'Create Diagram' }}
+                            {{ form.processing ? 'Creating...' : (form.type === 'drawing' ? 'Create Drawing' : 'Create Diagram') }}
                         </Button>
                     </div>
                 </form>

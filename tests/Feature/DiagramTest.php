@@ -1,19 +1,19 @@
 <?php
 
-use App\Models\User;
 use App\Models\Church;
 use App\Models\Diagram;
+use App\Models\User;
 
 test('users without diagrams module access are blocked', function () {
     $user = User::factory()->create();
     $church = Church::create(['name' => 'Methodist Church']);
-    
+
     // User role with NO diagrams module
     $church->users()->attach($user->id, [
         'role' => 'User',
         'modules' => ['racks'], // only racks
     ]);
-    
+
     $user->update(['current_church_id' => $church->id]);
     $this->actingAs($user);
 
@@ -24,12 +24,12 @@ test('users without diagrams module access are blocked', function () {
 test('users with diagrams module can list and create diagrams', function () {
     $user = User::factory()->create();
     $church = Church::create(['name' => 'Methodist Church']);
-    
+
     $church->users()->attach($user->id, [
         'role' => 'User',
         'modules' => ['diagrams'],
     ]);
-    
+
     $user->update(['current_church_id' => $church->id]);
     $this->actingAs($user);
 
@@ -40,11 +40,13 @@ test('users with diagrams module can list and create diagrams', function () {
     // 2. Can create diagram
     $response = $this->post(route('diagrams.store'), [
         'name' => 'FOH Audio Setup',
+        'type' => 'blueprint',
         'description' => 'FOH mixer outputs to main speakers',
     ]);
 
     $diagram = Diagram::where('name', 'FOH Audio Setup')->first();
     expect($diagram)->not->toBeNull();
+    expect($diagram->type)->toBe('blueprint');
     $response->assertRedirect(route('diagrams.show', $diagram));
 
     // 3. Can load editor
@@ -57,10 +59,10 @@ test('users with diagrams module can list and create diagrams', function () {
         'description' => 'New description',
         'data' => [
             'nodes' => [
-                ['id' => '1', 'type' => 'custom', 'position' => ['x' => 10, 'y' => 20], 'data' => ['label' => 'Mixer']]
+                ['id' => '1', 'type' => 'custom', 'position' => ['x' => 10, 'y' => 20], 'data' => ['label' => 'Mixer']],
             ],
-            'edges' => []
-        ]
+            'edges' => [],
+        ],
     ]);
     $response->assertRedirect();
 
@@ -92,6 +94,7 @@ test('diagrams are isolated between church workspaces', function () {
     $diagramA = Diagram::create([
         'church_id' => $churchA->id,
         'name' => 'Church A Layout',
+        'type' => 'blueprint',
         'created_by' => $userA->id,
         'data' => ['nodes' => [], 'edges' => []],
     ]);
@@ -108,4 +111,67 @@ test('diagrams are isolated between church workspaces', function () {
     ]);
     $response->assertStatus(403);
     expect($diagramA->refresh()->name)->toBe('Church A Layout');
+});
+
+test('users can create and edit free drawings', function () {
+    $user = User::factory()->create();
+    $church = Church::create(['name' => 'Methodist Church']);
+    $church->users()->attach($user->id, [
+        'role' => 'User',
+        'modules' => ['diagrams'],
+    ]);
+    $user->update(['current_church_id' => $church->id]);
+    $this->actingAs($user);
+
+    // 1. Create Free Drawing
+    $response = $this->post(route('diagrams.store'), [
+        'name' => 'Sanctuary Stage Free Drawing',
+        'type' => 'drawing',
+        'description' => 'Layout map of sanctuary stage',
+    ]);
+
+    $diagram = Diagram::where('name', 'Sanctuary Stage Free Drawing')->first();
+    expect($diagram)->not->toBeNull();
+    expect($diagram->type)->toBe('drawing');
+    $response->assertRedirect(route('diagrams.show', $diagram));
+
+    // 2. Load DrawingEditor view
+    $response = $this->get(route('diagrams.show', $diagram));
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page->component('diagrams/DrawingEditor'));
+
+    // 3. Save drawing properties
+    $response = $this->put(route('diagrams.update', $diagram), [
+        'name' => 'Sanctuary Stage (Updated)',
+        'description' => 'Updated desc',
+        'data' => [
+            'elements' => [
+                [
+                    'id' => '1',
+                    'type' => 'rectangle',
+                    'x' => 150,
+                    'y' => 150,
+                    'width' => 100,
+                    'height' => 100,
+                    'fillColor' => '#ffffff',
+                    'strokeColor' => '#000000',
+                    'strokeWidth' => 2,
+                    'strokeStyle' => 'solid',
+                ],
+            ],
+            'canvas' => [
+                'width' => 1000,
+                'height' => 600,
+                'background' => '#efefef',
+                'showGrid' => true,
+            ],
+        ],
+    ]);
+    $response->assertRedirect();
+
+    $diagram->refresh();
+    expect($diagram->name)->toBe('Sanctuary Stage (Updated)');
+    expect($diagram->description)->toBe('Updated desc');
+    expect($diagram->data['elements'][0]['type'])->toBe('rectangle');
+    expect($diagram->data['canvas']['background'])->toBe('#efefef');
 });

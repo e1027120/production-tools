@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Diagram;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -28,6 +28,7 @@ class DiagramController extends Controller
                 return [
                     'id' => $d->id,
                     'name' => $d->name,
+                    'type' => $d->type,
                     'description' => $d->description,
                     'created_by' => $d->creator->name,
                     'created_at' => $d->created_at?->toIso8601String(),
@@ -51,14 +52,24 @@ class DiagramController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'type' => ['required', 'string', 'in:blueprint,drawing'],
             'description' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $diagram = Diagram::create([
             'church_id' => $user->current_church_id,
             'name' => $validated['name'],
+            'type' => $validated['type'],
             'description' => $validated['description'] ?? null,
-            'data' => [
+            'data' => $validated['type'] === 'drawing' ? [
+                'elements' => [],
+                'canvas' => [
+                    'width' => 1200,
+                    'height' => 800,
+                    'background' => '#ffffff',
+                    'showGrid' => true,
+                ],
+            ] : [
                 'nodes' => [],
                 'edges' => [],
             ],
@@ -80,6 +91,12 @@ class DiagramController extends Controller
 
         if ($diagram->church_id !== $user->current_church_id) {
             abort(403, 'Unauthorized.');
+        }
+
+        if ($diagram->type === 'drawing') {
+            return Inertia::render('diagrams/DrawingEditor', [
+                'diagram' => $diagram,
+            ]);
         }
 
         return Inertia::render('diagrams/Editor', [

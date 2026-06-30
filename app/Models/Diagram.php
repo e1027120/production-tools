@@ -10,6 +10,7 @@ class Diagram extends Model
     protected $fillable = [
         'church_id',
         'name',
+        'type',
         'description',
         'data',
         'created_by',
