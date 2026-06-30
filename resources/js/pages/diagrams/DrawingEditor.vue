@@ -69,6 +69,7 @@ const canvasHeight = ref(800);
 const canvasBackground = ref('#ffffff');
 const showGrid = ref(true);
 const snapToGrid = ref(true);
+const zoom = ref(1); // 1 = 100%
 
 const selectedElementIds = ref<string[]>([]);
 const activeTool = ref<'select' | 'rectangle' | 'circle' | 'triangle' | 'star' | 'text' | 'line'>('select');
@@ -264,9 +265,9 @@ const startResize = (event: MouseEvent, direction: string, el: DrawingElement) =
 const handleMouseMove = (event: MouseEvent) => {
     if (selectedElementIds.value.length === 0) return;
     
-    const deltaX = event.clientX - dragStartX;
-    const deltaY = event.clientY - dragStartY;
-    const gridVal = snapToGrid.value ? 10 : 1;
+    const deltaX = (event.clientX - dragStartX) / zoom.value;
+    const deltaY = (event.clientY - dragStartY) / zoom.value;
+    const gridVal = snapToGrid.value ? 5 : 1;
 
     const snap = (val: number) => Math.round(val / gridVal) * gridVal;
 
@@ -323,6 +324,39 @@ const handleMouseUp = () => {
     resizeDirection = '';
     window.removeEventListener('mousemove', handleMouseMove);
     window.removeEventListener('mouseup', handleMouseUp);
+};
+
+// Canvas Resizing Interactions
+let isResizingCanvas = false;
+let canvasStartWidth = 0;
+let canvasStartHeight = 0;
+
+const startCanvasResize = (event: MouseEvent) => {
+    isResizingCanvas = true;
+    dragStartX = event.clientX;
+    dragStartY = event.clientY;
+    canvasStartWidth = canvasWidth.value;
+    canvasStartHeight = canvasHeight.value;
+
+    window.addEventListener('mousemove', handleCanvasMouseMove);
+    window.addEventListener('mouseup', handleCanvasMouseUp);
+};
+
+const handleCanvasMouseMove = (event: MouseEvent) => {
+    if (!isResizingCanvas) return;
+    const deltaX = (event.clientX - dragStartX) / zoom.value;
+    const deltaY = (event.clientY - dragStartY) / zoom.value;
+    const gridVal = snapToGrid.value ? 5 : 1;
+
+    const snap = (val: number) => Math.round(val / gridVal) * gridVal;
+    canvasWidth.value = Math.max(200, snap(canvasStartWidth + deltaX));
+    canvasHeight.value = Math.max(200, snap(canvasStartHeight + deltaY));
+};
+
+const handleCanvasMouseUp = () => {
+    isResizingCanvas = false;
+    window.removeEventListener('mousemove', handleCanvasMouseMove);
+    window.removeEventListener('mouseup', handleCanvasMouseUp);
 };
 
 // Text Inline Editing
@@ -725,8 +759,38 @@ const downloadSVG = () => {
                 </div>
             </div>
 
-            <!-- Align Right Export Action -->
+            <!-- Align Right Export & Zoom Action -->
             <div class="flex items-center gap-2">
+                <!-- Zoom Selector -->
+                <div class="flex items-center gap-1 bg-muted/40 rounded-xl px-2 py-0.5 border border-border/60 mr-1.5 h-8 shrink-0">
+                    <button 
+                        @click="zoom = Math.max(0.25, zoom - 0.25)" 
+                        class="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground text-xs font-bold leading-none cursor-pointer hover:bg-muted rounded-md"
+                        title="Zoom Out"
+                    >
+                        -
+                    </button>
+                    <select 
+                        v-model.number="zoom"
+                        class="bg-transparent border-0 text-[10px] font-bold text-foreground focus:outline-none cursor-pointer px-1 py-0.5 text-center focus:ring-0 select-none appearance-none"
+                    >
+                        <option :value="0.25">25%</option>
+                        <option :value="0.5">50%</option>
+                        <option :value="0.75">75%</option>
+                        <option :value="1">100%</option>
+                        <option :value="1.25">125%</option>
+                        <option :value="1.5">150%</option>
+                        <option :value="2">200%</option>
+                    </select>
+                    <button 
+                        @click="zoom = Math.min(2, zoom + 0.25)" 
+                        class="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground text-xs font-bold leading-none cursor-pointer hover:bg-muted rounded-md"
+                        title="Zoom In"
+                    >
+                        +
+                    </button>
+                </div>
+
                 <Button 
                     @click="downloadSVG" 
                     variant="outline"
@@ -782,7 +846,7 @@ const downloadSVG = () => {
 
                         <label class="flex items-center gap-2 cursor-pointer text-xs text-foreground">
                             <input type="checkbox" v-model="snapToGrid" class="rounded border-input text-primary" />
-                            <span>Snap coordinates to grid (10px)</span>
+                            <span>Snap coordinates to grid (5px)</span>
                         </label>
                     </div>
 
@@ -816,14 +880,15 @@ const downloadSVG = () => {
                     :style="{
                         width: canvasWidth + 'px',
                         height: canvasHeight + 'px',
-                        backgroundColor: canvasBackground
+                        backgroundColor: canvasBackground,
+                        zoom: zoom
                     }"
                 >
                     <!-- Dot Grid Background overlay -->
                     <div 
                         v-if="showGrid" 
                         class="absolute inset-0 pointer-events-none"
-                        style="background-image: radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px); background-size: 20px 20px;"
+                        style="background-image: radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px); background-size: 10px 10px;"
                     ></div>
 
                     <!-- SVG Canvas vector graphics -->
@@ -1048,6 +1113,18 @@ const downloadSVG = () => {
                             @mousedown="startResize($event, 'end', selectedElement)"
                             title="End Node / Arrowhead"
                         ></div>
+                    </div>
+
+                    <!-- Canvas Resize Handle -->
+                    <div 
+                        class="absolute bottom-0 right-0 size-3.5 bg-[#1AC18C]/20 border-r-2 border-b-2 border-[#1AC18C] cursor-se-resize flex items-end justify-end pointer-events-auto z-10 rounded-br"
+                        @mousedown.stop.prevent="startCanvasResize"
+                        title="Drag to resize canvas sheet"
+                    >
+                        <svg class="size-2 text-[#1AC18C]" viewBox="0 0 10 10">
+                            <line x1="0" y1="10" x2="10" y2="0" stroke="currentColor" stroke-width="1.5" />
+                            <line x1="4" y1="10" x2="10" y2="4" stroke="currentColor" stroke-width="1.5" />
+                        </svg>
                     </div>
                 </div>
             </div>
