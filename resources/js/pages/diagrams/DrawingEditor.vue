@@ -733,6 +733,7 @@ const downloadSVG = () => {
                                 rx="4"
                                 class="cursor-pointer"
                                 @mousedown="startDrag($event, el)"
+                                @click.stop=""
                                 @dblclick="enableTextEdit(el)"
                             />
 
@@ -749,6 +750,7 @@ const downloadSVG = () => {
                                 :stroke-dasharray="el.strokeStyle === 'dashed' ? '4' : '0'"
                                 class="cursor-pointer"
                                 @mousedown="startDrag($event, el)"
+                                @click.stop=""
                                 @dblclick="enableTextEdit(el)"
                             />
 
@@ -762,6 +764,7 @@ const downloadSVG = () => {
                                 :stroke-dasharray="el.strokeStyle === 'dashed' ? '4' : '0'"
                                 class="cursor-pointer"
                                 @mousedown="startDrag($event, el)"
+                                @click.stop=""
                                 @dblclick="enableTextEdit(el)"
                             />
 
@@ -786,6 +789,7 @@ const downloadSVG = () => {
                                 :stroke-dasharray="el.strokeStyle === 'dashed' ? '4' : '0'"
                                 class="cursor-pointer"
                                 @mousedown="startDrag($event, el)"
+                                @click.stop=""
                                 @dblclick="enableTextEdit(el)"
                             />
 
@@ -799,6 +803,7 @@ const downloadSVG = () => {
                                 fill="transparent"
                                 class="cursor-pointer"
                                 @mousedown="startDrag($event, el)"
+                                @click.stop=""
                                 @dblclick="enableTextEdit(el)"
                             />
 
@@ -815,6 +820,7 @@ const downloadSVG = () => {
                                 :marker-end="el.lineEnd === 'arrow' ? 'url(#arrowhead)' : 'none'"
                                 class="cursor-pointer"
                                 @mousedown="startDrag($event, el)"
+                                @click.stop=""
                             />
 
                             <!-- Text block labels inside shapes / textboxes -->
@@ -872,6 +878,7 @@ const downloadSVG = () => {
                             width: selectedElement.width + 'px',
                             height: selectedElement.height + 'px'
                         }"
+                        @click.stop=""
                     >
                         <!-- Normal Shape Resize Handles -->
                         <div v-if="selectedElement.type !== 'line'">
@@ -895,7 +902,7 @@ const downloadSVG = () => {
                     </div>
 
                     <!-- Line Start & End Drag Handles -->
-                    <div v-if="selectedElement && selectedElement.type === 'line'">
+                    <div v-if="selectedElement && selectedElement.type === 'line'" @click.stop="">
                         <div 
                             class="absolute size-3 bg-[#1AC18C] border border-white rounded-full z-20 cursor-move"
                             :style="{
