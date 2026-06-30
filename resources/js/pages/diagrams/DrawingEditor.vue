@@ -70,7 +70,7 @@ const canvasBackground = ref('#ffffff');
 const showGrid = ref(true);
 const snapToGrid = ref(true);
 
-const selectedElementId = ref<string | null>(null);
+const selectedElementIds = ref<string[]>([]);
 const activeTool = ref<'select' | 'rectangle' | 'circle' | 'triangle' | 'star' | 'text' | 'line'>('select');
 const textEditElementId = ref<string | null>(null);
 const textEditInput = ref('');
@@ -88,8 +88,20 @@ onMounted(() => {
     }
 });
 
+const selectedElements = computed(() => {
+    return elements.value.filter(el => selectedElementIds.value.includes(el.id));
+});
+
 const selectedElement = computed(() => {
-    return elements.value.find(el => el.id === selectedElementId.value) || null;
+    return elements.value.find(el => el.id === selectedElementIds.value[0]) || null;
+});
+
+const canGroup = computed(() => {
+    return selectedElementIds.value.length > 1;
+});
+
+const canUngroup = computed(() => {
+    return selectedElements.value.some(el => !!el.groupId);
 });
 
 // Save drawing settings
@@ -160,7 +172,7 @@ const addElement = (type: DrawingElement['type']) => {
     }
 
     elements.value.push(newEl);
-    selectedElementId.value = id;
+    selectedElementIds.value = [id];
     activeTool.value = 'select';
 };
 
@@ -177,6 +189,8 @@ let elementStartHeight = 0;
 let elementStartLineX2 = 0;
 let elementStartLineY2 = 0;
 
+const startCoords = ref<Array<{ id: string; x: number; y: number; x2?: number; y2?: number }>>([]);
+
 const startDrag = (event: MouseEvent, el: DrawingElement) => {
     if (activeTool.value !== 'select' || textEditElementId.value === el.id) {
         return;
@@ -184,17 +198,42 @@ const startDrag = (event: MouseEvent, el: DrawingElement) => {
     event.preventDefault();
     event.stopPropagation();
     
-    selectedElementId.value = el.id;
+    // Select element and its group members
+    const groupMembers = el.groupId 
+        ? elements.value.filter(e => e.groupId === el.groupId).map(e => e.id)
+        : [el.id];
+
+    if (event.shiftKey) {
+        // Shift select toggles selection of whole group
+        const alreadySelected = selectedElementIds.value.includes(el.id);
+        if (alreadySelected) {
+            selectedElementIds.value = selectedElementIds.value.filter(id => !groupMembers.includes(id));
+        } else {
+            groupMembers.forEach(id => {
+                if (!selectedElementIds.value.includes(id)) {
+                    selectedElementIds.value.push(id);
+                }
+            });
+        }
+    } else {
+        // Normal select: if already selected, don't clear (to allow group dragging)
+        if (!selectedElementIds.value.includes(el.id)) {
+            selectedElementIds.value = [...groupMembers];
+        }
+    }
+
     isDragging = true;
     dragStartX = event.clientX;
     dragStartY = event.clientY;
-    elementStartX = el.x;
-    elementStartY = el.y;
 
-    if (el.type === 'line') {
-        elementStartLineX2 = el.x2 || el.x;
-        elementStartLineY2 = el.y2 || el.y;
-    }
+    // Save starting position of all selected elements for relative dragging
+    startCoords.value = selectedElements.value.map(item => ({
+        id: item.id,
+        x: item.x,
+        y: item.y,
+        x2: item.x2,
+        y2: item.y2,
+    }));
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
@@ -223,7 +262,7 @@ const startResize = (event: MouseEvent, direction: string, el: DrawingElement) =
 };
 
 const handleMouseMove = (event: MouseEvent) => {
-    if (!selectedElement.value) return;
+    if (selectedElementIds.value.length === 0) return;
     
     const deltaX = event.clientX - dragStartX;
     const deltaY = event.clientY - dragStartY;
@@ -232,13 +271,17 @@ const handleMouseMove = (event: MouseEvent) => {
     const snap = (val: number) => Math.round(val / gridVal) * gridVal;
 
     if (isDragging) {
-        selectedElement.value.x = snap(elementStartX + deltaX);
-        selectedElement.value.y = snap(elementStartY + deltaY);
-
-        if (selectedElement.value.type === 'line') {
-            selectedElement.value.x2 = snap(elementStartLineX2 + deltaX);
-            selectedElement.value.y2 = snap(elementStartLineY2 + deltaY);
-        }
+        startCoords.value.forEach(start => {
+            const el = elements.value.find(e => e.id === start.id);
+            if (el) {
+                el.x = snap(start.x + deltaX);
+                el.y = snap(start.y + deltaY);
+                if (el.type === 'line' && start.x2 !== undefined) {
+                    el.x2 = snap(start.x2 + deltaX);
+                    el.y2 = snap(start.y2 + deltaY);
+                }
+            }
+        });
     } else if (isResizing) {
         const el = selectedElement.value;
         if (el.type === 'line') {
@@ -284,7 +327,7 @@ const handleMouseUp = () => {
 
 // Text Inline Editing
 const enableTextEdit = (el: DrawingElement) => {
-    selectedElementId.value = el.id;
+    selectedElementIds.value = [el.id];
     textEditElementId.value = el.id;
     textEditInput.value = el.text || '';
     nextTick(() => {
@@ -305,50 +348,108 @@ const saveTextEdit = () => {
 
 // Layer Depth Controls
 const moveLayer = (action: 'front' | 'back' | 'forward' | 'backward') => {
-    if (!selectedElementId.value) return;
-    const idx = elements.value.findIndex(e => e.id === selectedElementId.value);
-    if (idx === -1) return;
+    if (selectedElementIds.value.length === 0) return;
+    
+    // Find absolute indices in array
+    const indices = selectedElementIds.value
+        .map(id => elements.value.findIndex(e => e.id === id))
+        .filter(idx => idx !== -1)
+        .sort((a, b) => a - b);
 
-    const el = elements.value[idx];
-    elements.value.splice(idx, 1);
+    if (indices.length === 0) return;
 
     if (action === 'front') {
-        elements.value.push(el);
+        const items = indices.map(idx => elements.value[idx]);
+        elements.value = elements.value.filter((_, idx) => !indices.includes(idx));
+        elements.value.push(...items);
     } else if (action === 'back') {
-        elements.value.unshift(el);
+        const items = indices.map(idx => elements.value[idx]);
+        elements.value = elements.value.filter((_, idx) => !indices.includes(idx));
+        elements.value.unshift(...items);
     } else if (action === 'forward') {
-        const targetIdx = Math.min(elements.value.length, idx + 1);
-        elements.value.splice(targetIdx, 0, el);
+        for (let i = indices.length - 1; i >= 0; i--) {
+            const idx = indices[i];
+            if (idx < elements.value.length - 1) {
+                const el = elements.value[idx];
+                elements.value.splice(idx, 1);
+                elements.value.splice(idx + 1, 0, el);
+            }
+        }
     } else if (action === 'backward') {
-        const targetIdx = Math.max(0, idx - 1);
-        elements.value.splice(targetIdx, 0, el);
+        for (let i = 0; i < indices.length; i++) {
+            const idx = indices[i];
+            if (idx > 0) {
+                const el = elements.value[idx];
+                elements.value.splice(idx, 1);
+                elements.value.splice(idx - 1, 0, el);
+            }
+        }
     }
 };
 
 // Delete & Duplicate
 const deleteSelected = () => {
-    if (!selectedElementId.value) return;
-    elements.value = elements.value.filter(e => e.id !== selectedElementId.value);
-    selectedElementId.value = null;
+    if (selectedElementIds.value.length === 0) return;
+
+    // Delete selected elements + any other elements in their groups
+    const groupIdsToDelete = selectedElements.value.map(e => e.groupId).filter(Boolean) as string[];
+
+    elements.value = elements.value.filter(el => {
+        if (selectedElementIds.value.includes(el.id)) return false;
+        if (el.groupId && groupIdsToDelete.includes(el.groupId)) return false;
+        return true;
+    });
+
+    selectedElementIds.value = [];
 };
 
 const duplicateSelected = () => {
-    if (!selectedElementId.value) return;
-    const el = selectedElement.value;
-    if (!el) return;
+    if (selectedElementIds.value.length === 0) return;
 
-    const id = 'element_' + Math.random().toString(36).substr(2, 9);
-    const copy: DrawingElement = {
-        ...JSON.parse(JSON.stringify(el)),
-        id,
-        x: el.x + 20,
-        y: el.y + 20,
-    };
-    if (el.x2 !== undefined) copy.x2 = (el.x2 || 0) + 20;
-    if (el.y2 !== undefined) copy.y2 = (el.y2 || 0) + 20;
+    const duplicatedIds: string[] = [];
+    const groupMapping: Record<string, string> = {};
 
-    elements.value.push(copy);
-    selectedElementId.value = id;
+    const newCopies = selectedElements.value.map(el => {
+        const newId = 'element_' + Math.random().toString(36).substr(2, 9);
+        duplicatedIds.push(newId);
+
+        const copy: DrawingElement = JSON.parse(JSON.stringify(el));
+        copy.id = newId;
+        copy.x = el.x + 20;
+        copy.y = el.y + 20;
+        if (el.x2 !== undefined) copy.x2 = (el.x2 || 0) + 20;
+        if (el.y2 !== undefined) copy.y2 = (el.y2 || 0) + 20;
+
+        if (el.groupId) {
+            if (!groupMapping[el.groupId]) {
+                groupMapping[el.groupId] = 'group_' + Math.random().toString(36).substr(2, 9);
+            }
+            copy.groupId = groupMapping[el.groupId];
+        }
+
+        return copy;
+    });
+
+    elements.value.push(...newCopies);
+    selectedElementIds.value = duplicatedIds;
+};
+
+// Group / Ungroup
+const groupSelected = () => {
+    if (selectedElementIds.value.length < 2) return;
+    const newGroupId = 'group_' + Math.random().toString(36).substr(2, 9);
+    selectedElements.value.forEach(el => {
+        el.groupId = newGroupId;
+    });
+};
+
+const ungroupSelected = () => {
+    const groupIdsToClear = [...new Set(selectedElements.value.map(el => el.groupId).filter(Boolean))];
+    elements.value.forEach(el => {
+        if (el.groupId && groupIdsToClear.includes(el.groupId)) {
+            delete el.groupId;
+        }
+    });
 };
 
 // Clean Keydown list
@@ -444,7 +545,7 @@ const downloadSVG = () => {
             <div class="flex items-center gap-1">
                 <!-- Toolbar Tools -->
                 <button 
-                    @click="activeTool = 'select'; selectedElementId = null"
+                    @click="activeTool = 'select'; selectedElementIds = []; textEditElementId = null"
                     class="p-2 rounded-lg hover:bg-muted/50 text-muted-foreground"
                     :class="{ 'bg-primary/10 text-primary hover:bg-primary/20': activeTool === 'select' }"
                     title="Select & Move Tool (V)"
@@ -578,6 +679,31 @@ const downloadSVG = () => {
 
                 <div class="h-4 w-px bg-border/40 mx-0.5"></div>
 
+                <!-- Group / Ungroup controls -->
+                <div class="flex items-center gap-1" v-if="canGroup || canUngroup">
+                    <Button 
+                        v-if="canGroup" 
+                        @click="groupSelected" 
+                        variant="ghost" 
+                        size="sm" 
+                        class="h-7 px-2 text-[10px] text-foreground font-bold hover:bg-[#1AC18C]/10 hover:text-[#1AC18C] border border-border/60 rounded-lg shrink-0" 
+                        title="Group selected shapes"
+                    >
+                        Group
+                    </Button>
+                    <Button 
+                        v-if="canUngroup" 
+                        @click="ungroupSelected" 
+                        variant="ghost" 
+                        size="sm" 
+                        class="h-7 px-2 text-[10px] text-foreground font-bold hover:bg-red-500/10 hover:text-red-500 border border-border/60 rounded-lg shrink-0" 
+                        title="Ungroup shapes"
+                    >
+                        Ungroup
+                    </Button>
+                    <div class="h-4 w-px bg-border/40 mx-0.5"></div>
+                </div>
+
                 <!-- Layers ordering -->
                 <div class="flex items-center gap-1">
                     <Button @click="moveLayer('front')" variant="ghost" size="sm" class="h-7 px-1.5" title="Bring to Front">
@@ -683,7 +809,7 @@ const downloadSVG = () => {
             <!-- Center Drawing Canvas Area -->
             <div 
                 class="flex-1 overflow-auto p-8 flex justify-center items-start relative select-none"
-                @click="selectedElementId = null; saveTextEdit()"
+                @click="selectedElementIds = []; saveTextEdit()"
             >
                 <div 
                     class="shadow-xl relative select-none border border-border/60 transition-all"
@@ -870,39 +996,40 @@ const downloadSVG = () => {
 
                     <!-- Selected elements corner resize handles -->
                     <div 
-                        v-if="selectedElement && textEditElementId === null"
-                        class="absolute border-2 border-[#1AC18C] pointer-events-none select-none z-20"
+                        v-for="el in selectedElements"
+                        :key="'border_' + el.id"
+                        class="absolute border border-dashed border-[#1AC18C]/80 pointer-events-none select-none z-20"
                         :style="{
-                            left: selectedElement.x + 'px',
-                            top: selectedElement.y + 'px',
-                            width: selectedElement.width + 'px',
-                            height: selectedElement.height + 'px'
+                            left: el.x + 'px',
+                            top: el.y + 'px',
+                            width: el.width + 'px',
+                            height: el.height + 'px'
                         }"
                         @click.stop=""
                     >
-                        <!-- Normal Shape Resize Handles -->
-                        <div v-if="selectedElement.type !== 'line'">
+                        <!-- Normal Shape Resize Handles (Only show for single-selection) -->
+                        <div v-if="selectedElementIds.length === 1 && el.type !== 'line'">
                             <div 
                                 class="absolute size-2.5 bg-white border border-[#1AC18C] -left-1.5 -top-1.5 pointer-events-auto cursor-nwse-resize"
-                                @mousedown="startResize($event, 'tl', selectedElement)"
+                                @mousedown="startResize($event, 'tl', el)"
                             ></div>
                             <div 
                                 class="absolute size-2.5 bg-white border border-[#1AC18C] -right-1.5 -top-1.5 pointer-events-auto cursor-nesw-resize"
-                                @mousedown="startResize($event, 'tr', selectedElement)"
+                                @mousedown="startResize($event, 'tr', el)"
                             ></div>
                             <div 
                                 class="absolute size-2.5 bg-white border border-[#1AC18C] -left-1.5 -bottom-1.5 pointer-events-auto cursor-nesw-resize"
-                                @mousedown="startResize($event, 'bl', selectedElement)"
+                                @mousedown="startResize($event, 'bl', el)"
                             ></div>
                             <div 
                                 class="absolute size-2.5 bg-white border border-[#1AC18C] -right-1.5 -bottom-1.5 pointer-events-auto cursor-nwse-resize"
-                                @mousedown="startResize($event, 'br', selectedElement)"
+                                @mousedown="startResize($event, 'br', el)"
                             ></div>
                         </div>
                     </div>
 
-                    <!-- Line Start & End Drag Handles -->
-                    <div v-if="selectedElement && selectedElement.type === 'line'" @click.stop="">
+                    <!-- Line Start & End Drag Handles (Only show for single-selection) -->
+                    <div v-if="selectedElementIds.length === 1 && selectedElement && selectedElement.type === 'line'" @click.stop="">
                         <div 
                             class="absolute size-3 bg-[#1AC18C] border border-white rounded-full z-20 cursor-move"
                             :style="{
