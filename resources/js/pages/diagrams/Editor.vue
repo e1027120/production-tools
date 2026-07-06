@@ -17,7 +17,9 @@ import {
     Trash2, 
     HelpCircle, 
     Info,
-    Check
+    Check,
+    Download,
+    Upload
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -445,6 +447,77 @@ const getNodeClasses = (data: any, isSelected: boolean) => {
 
     return classes.join(' ');
 };
+
+// Blueprint Export / Import utilities
+const exportBlueprint = () => {
+    const exportData = {
+        name: diagramName.value,
+        description: diagramDescription.value,
+        data: {
+            nodes: nodes.value,
+            edges: edges.value
+        }
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `${diagramName.value || 'blueprint'}_export.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+};
+
+const triggerBlueprintImport = () => {
+    const fileInput = document.getElementById('import-blueprint-file');
+    if (fileInput) fileInput.click();
+};
+
+const handleBlueprintImport = (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+        try {
+            const jsonText = e.target?.result as string;
+            const imported = JSON.parse(jsonText);
+
+            if (!imported.data || !Array.isArray(imported.data.nodes) || !Array.isArray(imported.data.edges)) {
+                alert('Invalid blueprint JSON structure. Missing nodes or edges.');
+                return;
+            }
+
+            if (confirm('Do you want to import this blueprint? This will replace your current technical layout.')) {
+                if (imported.name) diagramName.value = imported.name;
+                if (imported.description !== undefined) diagramDescription.value = imported.description || '';
+                
+                nodes.value = imported.data.nodes.map((node: any) => {
+                    if (!node.data) node.data = {};
+                    if (node.data.inputs === undefined) node.data.inputs = 1;
+                    if (node.data.outputs === undefined) node.data.outputs = 1;
+                    return node;
+                });
+
+                edges.value = imported.data.edges.map((edge: any) => {
+                    if (edge.targetHandle === 'left') edge.targetHandle = 'in-1';
+                    if (edge.sourceHandle === 'right') edge.sourceHandle = 'out-1';
+                    edge.type = 'custom';
+                    if (!edge.data) edge.data = {};
+                    if (!edge.data.waypoints) edge.data.waypoints = [];
+                    return edge;
+                });
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to parse blueprint JSON file.');
+        }
+    };
+
+    reader.readAsText(file);
+    input.value = '';
+};
 </script>
 
 <template>
@@ -471,6 +544,32 @@ const getNodeClasses = (data: any, isSelected: boolean) => {
             </div>
 
             <div class="flex items-center gap-2">
+                <!-- Import Blueprint Trigger -->
+                <input 
+                    type="file" 
+                    id="import-blueprint-file" 
+                    accept=".json" 
+                    class="hidden" 
+                    @change="handleBlueprintImport"
+                />
+                <Button 
+                    @click="triggerBlueprintImport" 
+                    variant="outline"
+                    class="rounded-xl text-xs h-8.5 border-border/60 hover:bg-muted/40 cursor-pointer"
+                    title="Import Blueprint Layout JSON"
+                >
+                    <Upload class="size-3.5 mr-1" /> Import
+                </Button>
+
+                <Button 
+                    @click="exportBlueprint" 
+                    variant="outline"
+                    class="rounded-xl text-xs h-8.5 border-border/60 hover:bg-muted/40 cursor-pointer mr-2"
+                    title="Export Blueprint Layout JSON"
+                >
+                    <Download class="size-3.5 mr-1" /> Export
+                </Button>
+
                 <Button 
                     @click="submitSave"
                     :disabled="isSaving"
