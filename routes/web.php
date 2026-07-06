@@ -4,6 +4,7 @@ use App\Http\Controllers\CablePlanController;
 use App\Http\Controllers\CatalogDeviceController;
 use App\Http\Controllers\ChurchController;
 use App\Http\Controllers\DiagramController;
+use App\Http\Controllers\DiagramLibraryController;
 use App\Http\Controllers\RackController;
 use App\Http\Controllers\ShoppingListController;
 use App\Http\Controllers\TrainingController;
@@ -177,6 +178,9 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
 
     // Technical Diagrams Module
     Route::resource('diagrams', DiagramController::class);
+    Route::get('/diagram-library-items', [DiagramLibraryController::class, 'index'])->name('diagram-library-items.index');
+    Route::post('/diagram-library-items', [DiagramLibraryController::class, 'store'])->name('diagram-library-items.store');
+    Route::delete('/diagram-library-items/{diagram_library_item}', [DiagramLibraryController::class, 'destroy'])->name('diagram-library-items.destroy');
 
     // Shopping List Module
     Route::resource('shopping-lists', ShoppingListController::class);

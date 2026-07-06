@@ -19,7 +19,11 @@ import {
     AlignLeft,
     AlignCenter,
     AlignRight,
-    Upload
+    Upload,
+    Plus,
+    Search,
+    Database,
+    X
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -84,6 +88,26 @@ const activeTool = ref<'select' | 'rectangle' | 'circle' | 'triangle' | 'star' |
 const textEditElementId = ref<string | null>(null);
 const textEditInput = ref('');
 
+// Library Items State
+const libraryItems = ref<any[]>([]);
+const librarySearch = ref('');
+const activeSidebarTab = ref<'canvas' | 'library'>('canvas');
+const showSaveToLibraryModal = ref(false);
+const newLibraryItemName = ref('');
+const newLibraryItemDesc = ref('');
+const isSavingToLibrary = ref(false);
+
+const fetchLibraryItems = async () => {
+    try {
+        const response = await fetch('/diagram-library-items');
+        if (response.ok) {
+            libraryItems.value = await response.json();
+        }
+    } catch (e) {
+        console.error('Failed to load library items', e);
+    }
+};
+
 // Load saved data
 onMounted(() => {
     if (props.diagram.data) {
@@ -95,6 +119,7 @@ onMounted(() => {
             showGrid.value = props.diagram.data.canvas.showGrid !== false;
         }
     }
+    fetchLibraryItems();
 });
 
 const selectedElements = computed(() => {
@@ -557,6 +582,131 @@ const ungroupSelected = () => {
             delete el.groupId;
         }
     });
+};
+
+// Filtered library items computed property
+const filteredLibraryItems = computed(() => {
+    if (!librarySearch.value.trim()) return libraryItems.value;
+    const query = librarySearch.value.toLowerCase();
+    return libraryItems.value.filter(item => {
+        return (item.name && item.name.toLowerCase().includes(query)) ||
+            (item.description && item.description.toLowerCase().includes(query));
+    });
+});
+
+// Save selected group/elements to the object library
+const saveSelectedToLibrary = async () => {
+    if (selectedElements.value.length === 0 || !newLibraryItemName.value.trim()) return;
+
+    isSavingToLibrary.value = true;
+    
+    // Find bounding box minX and minY to normalize positioning
+    let minX = Infinity;
+    let minY = Infinity;
+    selectedElements.value.forEach(el => {
+        minX = Math.min(minX, el.x);
+        minY = Math.min(minY, el.y);
+        if (el.x2 !== undefined) minX = Math.min(minX, el.x2);
+        if (el.y2 !== undefined) minY = Math.min(minY, el.y2);
+    });
+
+    if (minX === Infinity) minX = 0;
+    if (minY === Infinity) minY = 0;
+
+    // Clone and normalize elements relative to minX, minY
+    const normalizedElements = selectedElements.value.map(el => {
+        const copy = JSON.parse(JSON.stringify(el));
+        copy.x = el.x - minX;
+        copy.y = el.y - minY;
+        if (el.x2 !== undefined) copy.x2 = (el.x2 || 0) - minX;
+        if (el.y2 !== undefined) copy.y2 = (el.y2 || 0) - minY;
+        return copy;
+    });
+
+    try {
+        const response = await fetch('/diagram-library-items', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+            body: JSON.stringify({
+                name: newLibraryItemName.value,
+                description: newLibraryItemDesc.value,
+                elements: normalizedElements,
+            }),
+        });
+
+        if (response.ok) {
+            showSaveToLibraryModal.value = false;
+            newLibraryItemName.value = '';
+            newLibraryItemDesc.value = '';
+            await fetchLibraryItems();
+        } else {
+            const err = await response.json();
+            alert(err.message || 'Failed to save to library');
+        }
+    } catch (e) {
+        console.error('Failed to save to library', e);
+        alert('Network error while saving to library');
+    } finally {
+        isSavingToLibrary.value = false;
+    }
+};
+
+// Insert a library item (a group of elements) into the diagram
+const insertLibraryItem = (item: any) => {
+    if (!item.elements || item.elements.length === 0) return;
+
+    // Place at the center of the current canvas viewport
+    const insertX = 150;
+    const insertY = 150;
+
+    const newGroupId = 'group_' + Math.random().toString(36).substr(2, 9);
+    const newElementIds: string[] = [];
+
+    // Map of old elements to their new IDs to handle any references in the future
+    const newCopies = item.elements.map((el: any) => {
+        const newId = 'element_' + Math.random().toString(36).substr(2, 9);
+        newElementIds.push(newId);
+
+        const copy = JSON.parse(JSON.stringify(el));
+        copy.id = newId;
+        copy.groupId = newGroupId;
+        copy.x = el.x + insertX;
+        copy.y = el.y + insertY;
+        if (el.x2 !== undefined) copy.x2 = (el.x2 || 0) + insertX;
+        if (el.y2 !== undefined) copy.y2 = (el.y2 || 0) + insertY;
+
+        return copy;
+    });
+
+    elements.value.push(...newCopies);
+    selectedElementIds.value = newElementIds;
+};
+
+// Delete a library item
+const deleteLibraryItem = async (itemId: number) => {
+    if (!confirm('Are you sure you want to delete this item from the library?')) return;
+
+    try {
+        const response = await fetch(`/diagram-library-items/${itemId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+            },
+        });
+
+        if (response.ok) {
+            await fetchLibraryItems();
+        } else {
+            alert('Failed to delete library item');
+        }
+    } catch (e) {
+        console.error('Failed to delete library item', e);
+        alert('Network error while deleting library item');
+    }
 };
 
 // Clean Keydown list
@@ -1120,6 +1270,20 @@ const handleSVGImport = (event: Event) => {
                     </Button>
                 </div>
 
+                <!-- Library Save Option -->
+                <div class="flex items-center gap-1" v-if="selectedElementIds.length > 0 && !isReadOnly">
+                    <div class="h-4 w-px bg-border/40 mx-0.5"></div>
+                    <Button 
+                        @click="showSaveToLibraryModal = true" 
+                        variant="ghost" 
+                        size="sm" 
+                        class="h-7 px-2 text-[10px] text-[#1AC18C] hover:bg-[#1AC18C]/10 border border-[#1AC18C]/30 hover:border-[#1AC18C]/50 rounded-lg shrink-0 font-bold" 
+                        title="Save selected shapes as a template in your library"
+                    >
+                        <Database class="size-3 mr-1" /> Save to Library
+                    </Button>
+                </div>
+
                 <!-- Duplicate / Delete Actions -->
                 <div class="flex items-center gap-1">
                     <Button @click="duplicateSelected" variant="ghost" size="sm" class="h-7 px-1.5 hover:text-primary" title="Duplicate">
@@ -1194,64 +1358,142 @@ const handleSVGImport = (event: Event) => {
 
         <!-- Left Workspace Config and Center Board -->
         <div class="flex flex-1 overflow-hidden">
-            <!-- Sidebar Panel: Canvas Setup -->
-            <div class="w-64 bg-card border-r border-border/40 p-5 flex flex-col justify-between shrink-0 overflow-y-auto">
-                <div class="space-y-6">
-                    <div>
-                        <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-3">
-                            <Settings class="size-4" /> Canvas Properties
-                        </h4>
-                        
-                        <div class="space-y-4">
-                            <div class="grid grid-cols-2 gap-2">
-                                <div class="space-y-1">
-                                    <Label for="c-width" class="text-[10px] uppercase font-bold text-muted-foreground">Width (px)</Label>
-                                    <Input id="c-width" type="number" v-model.number="canvasWidth" step="50" class="h-8 rounded-lg text-xs" />
-                                </div>
-                                <div class="space-y-1">
-                                    <Label for="c-height" class="text-[10px] uppercase font-bold text-muted-foreground">Height (px)</Label>
-                                    <Input id="c-height" type="number" v-model.number="canvasHeight" step="50" class="h-8 rounded-lg text-xs" />
-                                </div>
-                            </div>
+            <!-- Sidebar Panel: Canvas Setup / Library -->
+            <div class="w-64 bg-card border-r border-border/40 flex flex-col shrink-0 overflow-hidden">
+                <!-- Sidebar Tabs Header -->
+                <div class="flex border-b border-border/40 p-2 gap-1 bg-muted/20">
+                    <button 
+                        @click="activeSidebarTab = 'canvas'"
+                        class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                        :class="activeSidebarTab === 'canvas' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+                    >
+                        <Settings class="size-3.5" /> Canvas
+                    </button>
+                    <button 
+                        @click="activeSidebarTab = 'library'"
+                        class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                        :class="activeSidebarTab === 'library' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+                    >
+                        <Database class="size-3.5" /> Library
+                    </button>
+                </div>
 
-                            <div class="space-y-1">
-                                <Label for="c-bg" class="text-[10px] uppercase font-bold text-muted-foreground">Background Color</Label>
-                                <div class="flex gap-2">
-                                    <input type="color" v-model="canvasBackground" class="size-8 p-0.5 border border-border rounded cursor-pointer shrink-0" />
-                                    <Input v-model="canvasBackground" class="h-8 text-xs font-mono uppercase" />
+                <div class="flex-1 overflow-y-auto p-5">
+                    <!-- Tab 1: Canvas properties -->
+                    <div v-if="activeSidebarTab === 'canvas'" class="space-y-6">
+                        <div>
+                            <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-3">
+                                <Settings class="size-4" /> Canvas Properties
+                            </h4>
+                            
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="space-y-1">
+                                        <Label for="c-width" class="text-[10px] uppercase font-bold text-muted-foreground">Width (px)</Label>
+                                        <Input id="c-width" type="number" v-model.number="canvasWidth" step="50" class="h-8 rounded-lg text-xs" />
+                                    </div>
+                                    <div class="space-y-1">
+                                        <Label for="c-height" class="text-[10px] uppercase font-bold text-muted-foreground">Height (px)</Label>
+                                        <Input id="c-height" type="number" v-model.number="canvasHeight" step="50" class="h-8 rounded-lg text-xs" />
+                                    </div>
+                                </div>
+
+                                <div class="space-y-1">
+                                    <Label for="c-bg" class="text-[10px] uppercase font-bold text-muted-foreground">Background Color</Label>
+                                    <div class="flex gap-2">
+                                        <input type="color" v-model="canvasBackground" class="size-8 p-0.5 border border-border rounded cursor-pointer shrink-0" />
+                                        <Input v-model="canvasBackground" class="h-8 text-xs font-mono uppercase" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
+
+                        <div class="border-t border-border/40 pt-4 space-y-3">
+                            <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                Alignment & Grid
+                            </h4>
+
+                            <label class="flex items-center gap-2 cursor-pointer text-xs text-foreground">
+                                <input type="checkbox" v-model="showGrid" class="rounded border-input text-primary" />
+                                <span>Show dot alignment grid</span>
+                            </label>
+
+                            <label class="flex items-center gap-2 cursor-pointer text-xs text-foreground">
+                                <input type="checkbox" v-model="snapToGrid" class="rounded border-input text-primary" />
+                                <span>Snap coordinates to grid (5px)</span>
+                            </label>
+                        </div>
+
+                        <div class="border-t border-border/40 pt-4 space-y-2">
+                            <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Drawing Info</h4>
+                            <textarea 
+                                v-model="diagramDescription" 
+                                placeholder="Enter description..." 
+                                rows="4" 
+                                class="flex w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]"
+                            ></textarea>
+                        </div>
                     </div>
 
-                    <div class="border-t border-border/40 pt-4 space-y-3">
-                        <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                            Alignment & Grid
-                        </h4>
+                    <!-- Tab 2: Object Library -->
+                    <div v-else class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                <Database class="size-4" /> Object Library
+                            </h4>
+                        </div>
+                        
+                        <!-- Search Bar -->
+                        <div class="relative w-full">
+                            <Search class="absolute left-2.5 top-1/2 transform -translate-y-1/2 size-3.5 text-muted-foreground" />
+                            <Input 
+                                v-model="librarySearch"
+                                placeholder="Search library..."
+                                class="pl-8 h-8 text-xs rounded-lg bg-muted/40 border-border/40 focus-visible:ring-primary w-full"
+                            />
+                        </div>
 
-                        <label class="flex items-center gap-2 cursor-pointer text-xs text-foreground">
-                            <input type="checkbox" v-model="showGrid" class="rounded border-input text-primary" />
-                            <span>Show dot alignment grid</span>
-                        </label>
+                        <!-- Library items list -->
+                        <div v-if="filteredLibraryItems.length > 0" class="space-y-2">
+                            <div 
+                                v-for="item in filteredLibraryItems"
+                                :key="item.id"
+                                class="bg-muted/40 hover:bg-muted border border-border/40 p-3 rounded-xl cursor-pointer transition-all flex justify-between items-start gap-2 relative group"
+                                @click="insertLibraryItem(item)"
+                            >
+                                <div class="grow min-w-0">
+                                    <div class="font-bold text-xs text-foreground truncate">{{ item.name }}</div>
+                                    <div v-if="item.description" class="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">{{ item.description }}</div>
+                                    <div class="text-[9px] text-muted-foreground/60 mt-1 font-semibold flex items-center gap-1">
+                                        <span>{{ item.elements.length }} shapes</span>
+                                        <span>•</span>
+                                        <span>By {{ item.created_by }}</span>
+                                    </div>
+                                </div>
+                                
+                                <Button 
+                                    v-if="!isReadOnly"
+                                    @click.stop="deleteLibraryItem(item.id)"
+                                    size="sm"
+                                    variant="ghost"
+                                    class="size-6 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-md shrink-0 self-center"
+                                    title="Delete from library"
+                                >
+                                    <Trash2 class="size-3.5" />
+                                </Button>
+                            </div>
+                        </div>
 
-                        <label class="flex items-center gap-2 cursor-pointer text-xs text-foreground">
-                            <input type="checkbox" v-model="snapToGrid" class="rounded border-input text-primary" />
-                            <span>Snap coordinates to grid (5px)</span>
-                        </label>
-                    </div>
-
-                    <div class="border-t border-border/40 pt-4 space-y-2">
-                        <h4 class="font-bold text-xs uppercase tracking-wider text-muted-foreground">Drawing Info</h4>
-                        <textarea 
-                            v-model="diagramDescription" 
-                            placeholder="Enter description..." 
-                            rows="4" 
-                            class="flex w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]"
-                        ></textarea>
+                        <div v-else class="text-center py-8 text-muted-foreground border border-dashed border-border/60 rounded-xl bg-muted/10 p-4 space-y-2">
+                            <div class="text-xs font-semibold">No items found</div>
+                            <p class="text-[10px] leading-normal text-left">
+                                Select shapes or a grouped drawing component, then click <strong>"Save to Library"</strong> in the toolbar above to populate your library list.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
-                <div class="pt-4 border-t border-border/30 text-[10px] text-muted-foreground space-y-1">
+                <div class="p-5 border-t border-border/30 text-[10px] text-muted-foreground space-y-1 bg-muted/5">
                     <p class="font-semibold text-foreground">Tips:</p>
                     <p>• Click shape tools above to draw vectors.</p>
                     <p>• Double-click text shapes to edit content.</p>
@@ -1530,6 +1772,62 @@ const handleSVGImport = (event: Event) => {
                 </div>
             </div>
             </div>
+        <!-- MODAL: Save to Object Library -->
+        <div v-if="showSaveToLibraryModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div class="bg-card border border-border/60 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 animate-out fade-out zoom-out-95">
+                <div class="px-6 py-4 border-b border-border/40 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <Database class="size-5 text-[#1AC18C]" />
+                        <h3 class="font-bold text-base text-foreground">Save Group to Library</h3>
+                    </div>
+                    <button type="button" @click="showSaveToLibraryModal = false" class="text-muted-foreground hover:text-foreground cursor-pointer">
+                        <X class="size-4" />
+                    </button>
+                </div>
+                <form @submit.prevent="saveSelectedToLibrary" class="p-6 space-y-4">
+                    <div class="space-y-1.5">
+                        <Label for="lib-name" class="text-xs text-foreground font-bold">Object / Group Name</Label>
+                        <Input 
+                            id="lib-name" 
+                            v-model="newLibraryItemName" 
+                            placeholder="e.g. FOH Desk Rack Stack" 
+                            required 
+                            class="rounded-xl h-9 text-xs"
+                        />
+                    </div>
+                    <div class="space-y-1.5">
+                        <Label for="lib-desc" class="text-xs text-foreground font-bold">Description (Optional)</Label>
+                        <textarea 
+                            id="lib-desc" 
+                            v-model="newLibraryItemDesc" 
+                            placeholder="e.g. Dual 12U racks with active fan systems" 
+                            rows="3" 
+                            class="flex w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]"
+                        ></textarea>
+                    </div>
+                    <div class="text-[11px] text-muted-foreground bg-muted/30 border border-border/40 p-3 rounded-xl leading-normal">
+                        This will save the <strong>{{ selectedElementIds.length }}</strong> selected shapes as a single reusable library item in this church workspace.
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <Button 
+                            type="button" 
+                            @click="showSaveToLibraryModal = false" 
+                            variant="outline" 
+                            class="rounded-xl text-xs h-9 cursor-pointer"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            type="submit" 
+                            :disabled="isSavingToLibrary || !newLibraryItemName.trim()" 
+                            class="bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-xl text-xs h-9 cursor-pointer"
+                        >
+                            {{ isSavingToLibrary ? 'Saving...' : 'Save Object' }}
+                        </Button>
+                    </div>
+                </form>
+            </div>
         </div>
+    </div>
     </div>
 </template>
