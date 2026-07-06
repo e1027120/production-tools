@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { 
     ShoppingBag, 
     Plus, 
@@ -16,6 +16,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import InputError from '@/components/InputError.vue';
+
+const page = usePage();
+const userRole = computed(() => (page.props.auth as any).currentChurch?.pivot?.role || 'User');
+const isReadOnly = computed(() => userRole.value === 'User');
 
 interface ShoppingList {
     id: number;
@@ -91,6 +95,7 @@ defineOptions({
             </div>
 
             <Button 
+                v-if="!isReadOnly"
                 @click="showCreateModal = true"
                 class="bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-xl cursor-pointer text-xs"
             >
@@ -104,6 +109,7 @@ defineOptions({
             <h3 class="font-bold text-base text-foreground">No shopping lists yet</h3>
             <p class="text-xs text-muted-foreground max-w-sm">Create lists to calculate quantities, unit prices, and phase-out Church tech upgrades.</p>
             <Button 
+                v-if="!isReadOnly"
                 @click="showCreateModal = true"
                 class="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl cursor-pointer text-xs"
             >
@@ -159,11 +165,12 @@ defineOptions({
                         :href="`/shopping-lists/${list.id}`"
                         class="flex-1 inline-flex items-center justify-center rounded-xl bg-primary text-primary-foreground text-xs font-semibold px-4 py-2 hover:bg-primary/95 transition-all duration-200 cursor-pointer shadow-sm"
                     >
-                        Edit Details
+                        {{ isReadOnly ? 'View Details' : 'Edit Details' }}
                         <ArrowRight class="ml-1.5 size-3.5" />
                     </Link>
 
                     <Button 
+                        v-if="!isReadOnly"
                         @click="deleteList(list.id)"
                         variant="ghost"
                         class="size-9 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-xl cursor-pointer"

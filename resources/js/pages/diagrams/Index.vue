@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { 
     Network, 
     Plus, 
@@ -16,6 +16,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import InputError from '@/components/InputError.vue';
+
+const page = usePage();
+const userRole = computed(() => (page.props.auth as any).currentChurch?.pivot?.role || 'User');
+const isReadOnly = computed(() => userRole.value === 'User');
 
 interface Diagram {
     id: number;
@@ -76,6 +80,7 @@ const formatDate = (isoString: string) => {
             </div>
 
             <Button 
+                v-if="!isReadOnly"
                 @click="showCreateModal = true"
                 class="bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-xl cursor-pointer text-xs"
             >
@@ -89,6 +94,7 @@ const formatDate = (isoString: string) => {
             <h3 class="font-bold text-base text-foreground">No technical diagrams yet</h3>
             <p class="text-xs text-muted-foreground max-w-sm">Create your first blueprint to document signal flows, camera lines, and hardware cables.</p>
             <Button 
+                v-if="!isReadOnly"
                 @click="showCreateModal = true"
                 class="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl cursor-pointer text-xs"
             >
@@ -135,6 +141,7 @@ const formatDate = (isoString: string) => {
                     </Link>
 
                     <Button 
+                        v-if="!isReadOnly"
                         @click="deleteDiagram(d.id)"
                         variant="ghost"
                         class="size-9 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-xl cursor-pointer"

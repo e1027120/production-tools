@@ -26,7 +26,7 @@ test('users with diagrams module can list and create diagrams', function () {
     $church = Church::create(['name' => 'Methodist Church']);
 
     $church->users()->attach($user->id, [
-        'role' => 'User',
+        'role' => 'Manager',
         'modules' => ['diagrams'],
     ]);
 
@@ -117,7 +117,7 @@ test('users can create and edit free drawings', function () {
     $user = User::factory()->create();
     $church = Church::create(['name' => 'Methodist Church']);
     $church->users()->attach($user->id, [
-        'role' => 'User',
+        'role' => 'Manager',
         'modules' => ['diagrams'],
     ]);
     $user->update(['current_church_id' => $church->id]);
@@ -174,4 +174,41 @@ test('users can create and edit free drawings', function () {
     expect($diagram->description)->toBe('Updated desc');
     expect($diagram->data['elements'][0]['type'])->toBe('rectangle');
     expect($diagram->data['canvas']['background'])->toBe('#efefef');
+});
+
+test('users with User role cannot modify diagrams', function () {
+    $user = User::factory()->create();
+    $church = Church::create(['name' => 'Methodist Church']);
+    $church->users()->attach($user->id, [
+        'role' => 'User',
+        'modules' => ['diagrams'],
+    ]);
+    $user->update(['current_church_id' => $church->id]);
+    $diagram = Diagram::create([
+        'church_id' => $church->id,
+        'name' => 'Existing sanctuary layout',
+        'type' => 'drawing',
+        'data' => ['elements' => [], 'canvas' => []],
+        'created_by' => $user->id,
+    ]);
+
+    $this->actingAs($user);
+
+    // Try store
+    $response = $this->post(route('diagrams.store'), [
+        'name' => 'Unauthorized Layout',
+        'type' => 'drawing',
+    ]);
+    $response->assertStatus(403);
+
+    // Try update
+    $response = $this->put(route('diagrams.update', $diagram), [
+        'name' => 'Unauthorized Edit',
+        'data' => ['elements' => [], 'canvas' => []],
+    ]);
+    $response->assertStatus(403);
+
+    // Try destroy
+    $response = $this->delete(route('diagrams.destroy', $diagram));
+    $response->assertStatus(403);
 });

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { 
     ArrowLeft, 
     Save, 
@@ -48,10 +48,22 @@ const props = defineProps<{
     catalog: any[];
 }>();
 
+const page = usePage();
+const userRole = computed(() => (page.props.auth as any).currentChurch?.pivot?.role || 'User');
+const isReadOnly = computed(() => userRole.value === 'User');
+
 // UI States
 const activeCategory = ref('All');
 const selectedDeviceToPlace = ref<any | null>(null);
 const hoverPosition = ref<number | null>(null);
+const onMouseEnterSlot = (position: number) => {
+    if (isReadOnly.value) return;
+    hoverPosition.value = position;
+};
+const onMouseLeaveSlot = () => {
+    if (isReadOnly.value) return;
+    hoverPosition.value = null;
+};
 const searchQuery = ref('');
 
 // Custom Device Form States
@@ -116,6 +128,7 @@ const isPlacementValid = (position: number, height: number): boolean => {
 
 // Start placement flow
 const selectDeviceForPlacement = (item: any) => {
+    if (isReadOnly.value) return;
     selectedDeviceToPlace.value = item;
 };
 
@@ -127,6 +140,7 @@ const cancelPlacement = () => {
 
 // Perform placement on slot click
 const placeDevice = (position: number) => {
+    if (isReadOnly.value) return;
     if (!selectedDeviceToPlace.value) return;
     
     const height = selectedDeviceToPlace.value.u_height;
@@ -151,11 +165,13 @@ const placeDevice = (position: number) => {
 
 // Remove Device
 const removeDevice = (id: string) => {
+    if (isReadOnly.value) return;
     form.devices = form.devices.filter(dev => dev.id !== id);
 };
 
 // Create custom device templates
 const createCustomDevice = () => {
+    if (isReadOnly.value) return;
     catalogForm.post('/catalog-devices', {
         onSuccess: () => {
             showCustomForm.value = false;
@@ -390,6 +406,7 @@ defineOptions({
                 <div>
                     <div class="flex items-center gap-3">
                         <input 
+                            :disabled="isReadOnly"
                             v-model="form.name" 
                             type="text" 
                             class="text-xl font-bold bg-transparent border-b border-transparent hover:border-border/60 focus:border-primary focus:outline-none py-0 px-1 w-64 rounded"
@@ -398,6 +415,7 @@ defineOptions({
                         <span class="text-xs font-semibold px-2 py-0.5 rounded bg-muted text-muted-foreground">{{ form.size }}U Rack</span>
                     </div>
                     <input 
+                        :disabled="isReadOnly"
                         v-model="form.description" 
                         type="text" 
                         placeholder="Click to add description..."
@@ -408,7 +426,7 @@ defineOptions({
 
             <!-- Actions -->
             <div class="flex items-center gap-2">
-                <Button @click="saveLayout" :disabled="form.processing" class="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl cursor-pointer">
+                <Button v-if="!isReadOnly" @click="saveLayout" :disabled="form.processing" class="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl cursor-pointer">
                     <Check v-if="form.wasSuccessful" class="mr-2 size-4" />
                     <Save v-else class="mr-2 size-4" />
                     {{ form.processing ? 'Saving...' : form.wasSuccessful ? 'Saved Layout!' : 'Save Layout' }}
@@ -444,6 +462,7 @@ defineOptions({
                         Device Catalog
                     </h3>
                     <Button 
+                        v-if="!isReadOnly"
                         @click="showCustomForm = !showCustomForm" 
                         size="sm" 
                         variant="ghost" 
@@ -553,9 +572,13 @@ defineOptions({
 
             <!-- 2. Visual Builder Enclosure (Middle - 5 Cols) -->
             <div class="col-span-12 md:col-span-7 lg:col-span-5 flex flex-col items-center gap-4">
-                <div class="text-xs text-muted-foreground text-center flex items-center gap-1.5 font-medium">
+                <div v-if="!isReadOnly" class="text-xs text-muted-foreground text-center flex items-center gap-1.5 font-medium">
                     <HelpCircle class="size-4" />
                     <span>Click device in catalog, then select slot in rack to mount.</span>
+                </div>
+                <div v-else class="text-xs text-muted-foreground text-center flex items-center gap-1.5 font-medium">
+                    <HelpCircle class="size-4" />
+                    <span>View active production rack details and diagnostic metrics.</span>
                 </div>
 
                 <!-- 19 Inch Rack Enclosure Frame -->
@@ -578,18 +601,19 @@ defineOptions({
                                 U{{ form.size - u + 1 }}
                             </div>
 
-                            <!-- Middle Bay container (only if unoccupied) -->
+                             <!-- Middle Bay container (only if unoccupied) -->
                             <div 
                                 v-if="!getDeviceAtSlot(form.size - u + 1)"
                                 :style="{ gridRowStart: u, gridRowEnd: u + 1 }"
                                 class="col-start-2 col-end-12 h-full rounded transition-colors relative flex items-center justify-center"
                                 :class="{
-                                    'bg-green-500/10 cursor-pointer border border-dashed border-green-500/30': selectedDeviceToPlace && isPlacementValid(form.size - u + 1, selectedDeviceToPlace.u_height),
-                                    'bg-red-500/5 cursor-not-allowed border border-dashed border-red-500/20': selectedDeviceToPlace && !isPlacementValid(form.size - u + 1, selectedDeviceToPlace.u_height),
-                                    'hover:bg-slate-800/25 border-b border-slate-800/30 cursor-pointer': !selectedDeviceToPlace
+                                    'bg-green-500/10 cursor-pointer border border-dashed border-green-500/30': !isReadOnly && selectedDeviceToPlace && isPlacementValid(form.size - u + 1, selectedDeviceToPlace.u_height),
+                                    'bg-red-500/5 cursor-not-allowed border border-dashed border-red-500/20': !isReadOnly && selectedDeviceToPlace && !isPlacementValid(form.size - u + 1, selectedDeviceToPlace.u_height),
+                                    'hover:bg-slate-800/25 border-b border-slate-800/30 cursor-pointer': !isReadOnly && !selectedDeviceToPlace,
+                                    'border-b border-slate-800/10': isReadOnly
                                 }"
-                                @mouseenter="hoverPosition = (form.size - u + 1)"
-                                @mouseleave="hoverPosition = null"
+                                @mouseenter="onMouseEnterSlot(form.size - u + 1)"
+                                @mouseleave="onMouseLeaveSlot"
                                 @click="placeDevice(form.size - u + 1)"
                             >
                                 <!-- Placement Hover Preview Graphic -->
@@ -636,6 +660,7 @@ defineOptions({
                             </div>
                             
                             <button 
+                                v-if="!isReadOnly"
                                 @click.stop="removeDevice(device.id)"
                                 class="text-white hover:text-red-400 p-1 hover:bg-black/20 rounded transition-colors cursor-pointer shrink-0"
                             >
@@ -748,7 +773,11 @@ defineOptions({
                                 <span class="font-mono text-[10px] font-bold px-1 py-0.5 rounded bg-muted text-muted-foreground mr-2">{{ dev.position }}U</span>
                                 <span class="font-semibold text-foreground">{{ dev.brand }} {{ dev.name }}</span>
                             </div>
-                            <button @click="removeDevice(dev.id)" class="text-muted-foreground hover:text-red-500 transition-colors">
+                            <button 
+                                v-if="!isReadOnly"
+                                @click="removeDevice(dev.id)" 
+                                class="text-muted-foreground hover:text-red-500 transition-colors"
+                            >
                                 <Trash2 class="size-3.5" />
                             </button>
                         </div>

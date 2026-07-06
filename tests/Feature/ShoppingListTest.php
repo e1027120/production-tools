@@ -30,7 +30,7 @@ test('users with shopping_lists module can manage shopping lists and items', fun
     $church = Church::create(['name' => 'Grace Church']);
 
     $church->users()->attach($user->id, [
-        'role' => 'User',
+        'role' => 'Manager',
         'modules' => ['shopping_lists'],
     ]);
 
@@ -178,4 +178,66 @@ test('shopping lists can be shared externally via token', function () {
     ]);
     $response->assertRedirect();
     expect($list->refresh()->shared_emails)->not->toContain('pastor@church.org');
+});
+
+test('users with User role cannot modify shopping lists or items', function () {
+    $user = User::factory()->create();
+    $church = Church::create(['name' => 'Grace Church']);
+    $church->users()->attach($user->id, [
+        'role' => 'User',
+        'modules' => ['shopping_lists'],
+    ]);
+    $user->update(['current_church_id' => $church->id]);
+    $list = ShoppingList::create([
+        'church_id' => $church->id,
+        'name' => 'Existing mic upgrade',
+        'created_by' => $user->id,
+    ]);
+    $item = $list->items()->create([
+        'name' => 'SM58',
+        'unit_price' => 99.00,
+        'quantity' => 2,
+    ]);
+
+    $this->actingAs($user);
+
+    // Try store
+    $response = $this->post(route('shopping-lists.store'), [
+        'name' => 'Unauthorized List',
+    ]);
+    $response->assertStatus(403);
+
+    // Try update
+    $response = $this->put(route('shopping-lists.update', $list), [
+        'name' => 'Unauthorized Edit',
+    ]);
+    $response->assertStatus(403);
+
+    // Try add item
+    $response = $this->post(route('shopping-lists.items.add', $list), [
+        'name' => 'Beta 58A',
+        'unit_price' => 159.00,
+        'quantity' => 1,
+    ]);
+    $response->assertStatus(403);
+
+    // Try update item
+    $response = $this->put(route('shopping-lists.items.update', [$list, $item]), [
+        'name' => 'Beta 58A Edit',
+        'unit_price' => 159.00,
+        'quantity' => 2,
+    ]);
+    $response->assertStatus(403);
+
+    // Try delete item
+    $response = $this->delete(route('shopping-lists.items.remove', [$list, $item]));
+    $response->assertStatus(403);
+
+    // Try toggle share
+    $response = $this->post(route('shopping-lists.toggle-share', $list));
+    $response->assertStatus(403);
+
+    // Try destroy
+    $response = $this->delete(route('shopping-lists.destroy', $list));
+    $response->assertStatus(403);
 });

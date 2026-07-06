@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { Server, Plus, Trash2, Eye, Calendar, Sparkles } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+const page = usePage();
+const userRole = computed(() => (page.props.auth as any).currentChurch?.pivot?.role || 'User');
+const isReadOnly = computed(() => userRole.value === 'User');
 
 // Define the shape of a Rack
 interface Device {
@@ -97,7 +101,7 @@ defineOptions({
                 <p class="text-sm text-muted-foreground">Manage and design your production equipment layout, power, and thermal distribution.</p>
             </div>
             
-            <Button @click="showCreateModal = true" class="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl cursor-pointer">
+            <Button v-if="!isReadOnly" @click="showCreateModal = true" class="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl cursor-pointer">
                 <Plus class="mr-2 size-4" />
                 Create New Rack
             </Button>
@@ -157,6 +161,7 @@ defineOptions({
                             </Button>
                         </Link>
                         <Button 
+                            v-if="!isReadOnly"
                             @click="deleteRack(rack.id)" 
                             size="sm" 
                             variant="ghost" 
@@ -178,7 +183,7 @@ defineOptions({
                 <h3 class="font-bold text-lg text-foreground">No Racks Created Yet</h3>
                 <p class="text-sm text-muted-foreground max-w-sm">Create a rack to start building layout diagrams, load analytics, and heat reports.</p>
             </div>
-            <Button @click="showCreateModal = true" class="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl cursor-pointer">
+            <Button v-if="!isReadOnly" @click="showCreateModal = true" class="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl cursor-pointer">
                 <Plus class="mr-2 size-4" />
                 Add Your First Rack
             </Button>

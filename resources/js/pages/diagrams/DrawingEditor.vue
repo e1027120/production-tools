@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { 
     ArrowLeft, 
     Save, 
@@ -66,6 +66,10 @@ interface DrawingElement {
 const props = defineProps<{
     diagram: Diagram;
 }>();
+
+const page = usePage();
+const userRole = computed(() => (page.props.auth as any).currentChurch?.pivot?.role || 'User');
+const isReadOnly = computed(() => userRole.value === 'User');
 
 const elements = ref<DrawingElement[]>([]);
 const canvasWidth = ref(1200);
@@ -199,6 +203,7 @@ const getCanvasCenter = (width: number, height: number) => {
 
 // Add Element helper
 const addElement = (type: DrawingElement['type']) => {
+    if (isReadOnly.value) return;
     const id = 'element_' + Math.random().toString(36).substr(2, 9);
     const width = type === 'line' ? 200 : 150;
     const height = type === 'line' ? 100 : 100;
@@ -257,6 +262,7 @@ let elementStartLineY2 = 0;
 const startCoords = ref<Array<{ id: string; x: number; y: number; x2?: number; y2?: number }>>([]);
 
 const startDrag = (event: MouseEvent, el: DrawingElement) => {
+    if (isReadOnly.value) return;
     if (activeTool.value !== 'select' || textEditElementId.value === el.id) {
         return;
     }
@@ -305,6 +311,7 @@ const startDrag = (event: MouseEvent, el: DrawingElement) => {
 };
 
 const startResize = (event: MouseEvent, direction: string, el: DrawingElement) => {
+    if (isReadOnly.value) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -396,6 +403,7 @@ let canvasStartWidth = 0;
 let canvasStartHeight = 0;
 
 const startCanvasResize = (event: MouseEvent) => {
+    if (isReadOnly.value) return;
     isResizingCanvas = true;
     dragStartX = event.clientX;
     dragStartY = event.clientY;
@@ -425,6 +433,7 @@ const handleCanvasMouseUp = () => {
 
 // Text Inline Editing
 const enableTextEdit = (el: DrawingElement) => {
+    if (isReadOnly.value) return;
     selectedElementIds.value = [el.id];
     textEditElementId.value = el.id;
     textEditInput.value = el.text || '';
@@ -885,6 +894,7 @@ const handleSVGImport = (event: Event) => {
                 </Link>
                 <div class="flex flex-col">
                     <input 
+                        :disabled="isReadOnly"
                         v-model="diagramName" 
                         class="font-bold text-sm bg-transparent border-0 focus:ring-0 focus:outline-none p-0 text-foreground w-64 hover:bg-muted/10 rounded px-1"
                         placeholder="Untitled Drawing"
@@ -893,7 +903,7 @@ const handleSVGImport = (event: Event) => {
                 </div>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2" v-if="!isReadOnly">
                 <span v-if="saveSuccess" class="text-xs text-emerald-500 font-semibold flex items-center gap-1">
                     <Check class="size-4" /> Saved Successfully
                 </span>
@@ -911,7 +921,7 @@ const handleSVGImport = (event: Event) => {
 
         <!-- Tool & Styling Toolbar -->
         <div class="h-12 bg-card border-b border-border/30 px-6 flex items-center justify-between shrink-0 overflow-x-auto gap-4">
-            <div class="flex items-center gap-1">
+            <div v-if="!isReadOnly" class="flex items-center gap-1">
                 <!-- Toolbar Tools -->
                 <button 
                     @click="activeTool = 'select'; selectedElementIds = []; textEditElementId = null"
@@ -955,7 +965,7 @@ const handleSVGImport = (event: Event) => {
             </div>
 
             <!-- Context Styles (Visible when element is selected) -->
-            <div v-if="selectedElement" class="flex items-center gap-3 bg-muted/30 px-3 py-1 rounded-xl border border-border/30">
+            <div v-if="selectedElement && !isReadOnly" class="flex items-center gap-3 bg-muted/30 px-3 py-1 rounded-xl border border-border/30">
                 <span class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Style</span>
                 
                 <!-- Fill Color -->
@@ -1162,6 +1172,7 @@ const handleSVGImport = (event: Event) => {
                     @change="handleSVGImport"
                 />
                 <Button 
+                    v-if="!isReadOnly"
                     @click="triggerSVGImport" 
                     variant="outline"
                     class="rounded-xl text-xs h-8 border-border/60 hover:bg-muted/40 cursor-pointer mr-1"
@@ -1462,7 +1473,7 @@ const handleSVGImport = (event: Event) => {
                         @click.stop=""
                     >
                         <!-- Normal Shape Resize Handles (Only show for single-selection) -->
-                        <div v-if="selectedElementIds.length === 1 && el.type !== 'line'">
+                        <div v-if="selectedElementIds.length === 1 && el.type !== 'line' && !isReadOnly">
                             <div 
                                 class="absolute size-2.5 bg-white border border-[#1AC18C] -left-1.5 -top-1.5 pointer-events-auto cursor-nwse-resize"
                                 @mousedown="startResize($event, 'tl', el)"
@@ -1483,7 +1494,7 @@ const handleSVGImport = (event: Event) => {
                     </div>
 
                     <!-- Line Start & End Drag Handles (Only show for single-selection) -->
-                    <div v-if="selectedElementIds.length === 1 && selectedElement && selectedElement.type === 'line'" @click.stop="">
+                    <div v-if="selectedElementIds.length === 1 && selectedElement && selectedElement.type === 'line' && !isReadOnly" @click.stop="">
                         <div 
                             class="absolute size-3 bg-[#1AC18C] border border-white rounded-full z-20 cursor-move"
                             :style="{
@@ -1506,6 +1517,7 @@ const handleSVGImport = (event: Event) => {
 
                     <!-- Canvas Resize Handle -->
                     <div 
+                        v-if="!isReadOnly"
                         class="absolute bottom-0 right-0 size-3.5 bg-[#1AC18C]/20 border-r-2 border-b-2 border-[#1AC18C] cursor-se-resize flex items-end justify-end pointer-events-auto z-10 rounded-br"
                         @mousedown.stop.prevent="startCanvasResize"
                         title="Drag to resize canvas sheet"

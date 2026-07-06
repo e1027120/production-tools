@@ -31,7 +31,7 @@ test('users with cables module can manage cable plans', function () {
     $church = Church::create(['name' => 'Calvary Chapel']);
 
     $church->users()->attach($user->id, [
-        'role' => 'User',
+        'role' => 'Manager',
         'modules' => ['cables'],
     ]);
 
@@ -235,4 +235,38 @@ test('users can manage cable types and naming cascades to cable plans', function
     $response = $this->delete(route('cable-types.destroy', $type));
     $response->assertRedirect();
     $this->assertDatabaseMissing('cable_types', ['id' => $type->id]);
+});
+
+test('users with User role cannot modify cable plans', function () {
+    $user = User::factory()->create();
+    $church = Church::create(['name' => 'Calvary Chapel']);
+    $church->users()->attach($user->id, [
+        'role' => 'User',
+        'modules' => ['cables'],
+    ]);
+    $user->update(['current_church_id' => $church->id]);
+    $plan = CablePlan::create([
+        'church_id' => $church->id,
+        'name' => 'Existing sanctuary design',
+        'created_by' => $user->id,
+    ]);
+
+    $this->actingAs($user);
+
+    // Try store
+    $response = $this->post(route('cable-plans.store'), [
+        'name' => 'Unauthorized Design',
+    ]);
+    $response->assertStatus(403);
+
+    // Try update
+    $response = $this->put(route('cable-plans.update', $plan), [
+        'name' => 'Unauthorized Edit',
+        'cables' => [],
+    ]);
+    $response->assertStatus(403);
+
+    // Try destroy
+    $response = $this->delete(route('cable-plans.destroy', $plan));
+    $response->assertStatus(403);
 });

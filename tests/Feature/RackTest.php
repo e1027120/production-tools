@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\User;
-use App\Models\Rack;
 use App\Models\Church;
+use App\Models\Rack;
+use App\Models\User;
 
 test('guests are redirected to the login page when accessing racks', function () {
     $response = $this->get(route('racks.index'));
@@ -73,15 +73,15 @@ test('authenticated users can update a rack configuration and device list', func
             'position' => 1,
             'power_consumption' => 120,
             'heat_dissipation' => 410,
-            'weight' => 6.5
-        ]
+            'weight' => 6.5,
+        ],
     ];
 
     $response = $this->put(route('racks.update', $rack), [
         'name' => 'Updated Rack Name',
         'size' => 16,
         'description' => 'Updated description.',
-        'devices' => $devices
+        'devices' => $devices,
     ]);
 
     $response->assertRedirect(route('racks.show', $rack));
@@ -106,7 +106,7 @@ test('authenticated users can delete a rack', function () {
     $response->assertRedirect(route('racks.index'));
 
     $this->assertDatabaseMissing('racks', [
-        'id' => $rack->id
+        'id' => $rack->id,
     ]);
 });
 
@@ -174,4 +174,51 @@ test('catalog device validation constraints are enforced', function () {
         'power_consumption',
         'weight',
     ]);
+});
+
+test('users with User role cannot modify racks or add catalog devices', function () {
+    $user = User::factory()->create();
+    $church = Church::create(['name' => 'Grace Church']);
+    $church->users()->attach($user->id, [
+        'role' => 'User',
+        'modules' => ['racks'],
+    ]);
+    $user->update(['current_church_id' => $church->id]);
+    $rack = Rack::create([
+        'church_id' => $church->id,
+        'name' => 'Existing rack',
+        'size' => 24,
+        'devices' => [],
+    ]);
+
+    $this->actingAs($user);
+
+    // Try store rack
+    $response = $this->post(route('racks.store'), [
+        'name' => 'Unauthorized Rack',
+        'size' => 24,
+    ]);
+    $response->assertStatus(403);
+
+    // Try update rack
+    $response = $this->put(route('racks.update', $rack), [
+        'name' => 'Unauthorized Edit',
+        'size' => 24,
+    ]);
+    $response->assertStatus(403);
+
+    // Try delete rack
+    $response = $this->delete(route('racks.destroy', $rack));
+    $response->assertStatus(403);
+
+    // Try store catalog device
+    $response = $this->post(route('catalog-devices.store'), [
+        'brand' => 'Allen & Heath',
+        'name' => 'SQ-5',
+        'type' => 'Audio',
+        'u_height' => 4,
+        'power_consumption' => 90,
+        'weight' => 10.5,
+    ]);
+    $response->assertStatus(403);
 });

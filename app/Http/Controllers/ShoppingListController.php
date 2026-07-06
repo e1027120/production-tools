@@ -51,7 +51,7 @@ class ShoppingListController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -117,7 +117,7 @@ class ShoppingListController extends Controller
     public function update(Request $request, ShoppingList $shoppingList): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -144,7 +144,7 @@ class ShoppingListController extends Controller
     public function destroy(Request $request, ShoppingList $shoppingList): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -163,7 +163,7 @@ class ShoppingListController extends Controller
     public function addItem(Request $request, ShoppingList $shoppingList): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -190,7 +190,7 @@ class ShoppingListController extends Controller
     public function updateItem(Request $request, ShoppingList $shoppingList, ShoppingListItem $item): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -217,7 +217,7 @@ class ShoppingListController extends Controller
     public function removeItem(Request $request, ShoppingList $shoppingList, ShoppingListItem $item): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -236,7 +236,7 @@ class ShoppingListController extends Controller
     public function toggleShare(Request $request, ShoppingList $shoppingList): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -263,7 +263,7 @@ class ShoppingListController extends Controller
     public function shareEmail(Request $request, ShoppingList $shoppingList): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -292,7 +292,7 @@ class ShoppingListController extends Controller
     public function removeSharedEmail(Request $request, ShoppingList $shoppingList): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('shopping_lists')) {
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 

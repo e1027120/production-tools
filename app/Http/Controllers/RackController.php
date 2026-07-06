@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
+use App\Models\CatalogDevice;
 use App\Models\Rack;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Http\RedirectResponse;
 
 class RackController extends Controller
 {
@@ -22,13 +22,13 @@ class RackController extends Controller
             ->get();
 
         return Inertia::render('racks/Index', [
-            'racks' => $racks
+            'racks' => $racks,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        if (! $request->user()->hasModuleAccess('racks')) {
+        if (! $request->user()->hasModuleAccess('racks') || ! $request->user()->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -61,17 +61,17 @@ class RackController extends Controller
 
         return Inertia::render('racks/Builder', [
             'rack' => $rack,
-            'catalog' => \App\Models\CatalogDevice::whereNull('church_id')
+            'catalog' => CatalogDevice::whereNull('church_id')
                 ->orWhere('church_id', $request->user()->current_church_id)
                 ->orderBy('brand')
                 ->orderBy('name')
-                ->get()
+                ->get(),
         ]);
     }
 
     public function update(Request $request, Rack $rack): RedirectResponse
     {
-        if (! $request->user()->hasModuleAccess('racks')) {
+        if (! $request->user()->hasModuleAccess('racks') || ! $request->user()->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -98,7 +98,7 @@ class RackController extends Controller
 
     public function destroy(Request $request, Rack $rack): RedirectResponse
     {
-        if (! $request->user()->hasModuleAccess('racks')) {
+        if (! $request->user()->hasModuleAccess('racks') || ! $request->user()->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 

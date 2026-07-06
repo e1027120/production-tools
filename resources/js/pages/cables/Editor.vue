@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { 
     Ruler, 
     ArrowLeft, 
@@ -66,6 +66,10 @@ const props = defineProps<{
     plan: CablePlan;
     cableTypes: CableType[];
 }>();
+
+const page = usePage();
+const userRole = computed(() => (page.props.auth as any).currentChurch?.pivot?.role || 'User');
+const isReadOnly = computed(() => userRole.value === 'User');
 
 // Editor modes: 'select' (idle), 'draw' (placing path points), 'calibrate' (defining scale ruler)
 const editorMode = ref<'select' | 'draw' | 'calibrate'>('select');
@@ -225,6 +229,7 @@ const draggedCableId = ref<string | null>(null);
 const draggedPointIdx = ref<number | null>(null);
 
 const startDrag = (event: MouseEvent, cableId: string, pointIdx: number) => {
+    if (isReadOnly.value) return;
     event.preventDefault();
     event.stopPropagation();
     
@@ -407,6 +412,7 @@ const grandTotalCost = computed(() => {
 
 // Canvas click listener to place vertex or ruler calibration point
 const onCanvasClick = (event: MouseEvent) => {
+    if (isReadOnly.value) return;
     if (!canvasRef.value) return;
     const rect = canvasRef.value.getBoundingClientRect();
     // Translate click to image coordinate space by adjusting for zoom
@@ -540,6 +546,7 @@ defineOptions({
             <!-- Toolbar actions -->
             <div class="flex flex-wrap gap-2">
                 <Button 
+                    v-if="!isReadOnly"
                     @click="showUploadModal = true"
                     variant="outline" 
                     size="sm" 
@@ -558,6 +565,7 @@ defineOptions({
                     <Download class="mr-1.5 size-3.5" /> Export BOM
                 </Button>
                 <Button 
+                    v-if="!isReadOnly"
                     @click="savePlan"
                     class="bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-xl cursor-pointer text-xs h-9"
                     :disabled="saveForm.processing"
@@ -583,18 +591,18 @@ defineOptions({
                         <div class="grid grid-cols-3 gap-2">
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Unit</Label>
-                                <select v-model="planScaleUnit" class="flex h-9 w-full rounded-xl border border-input bg-background px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                                <select :disabled="isReadOnly" v-model="planScaleUnit" class="flex h-9 w-full rounded-xl border border-input bg-background px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                                     <option value="m">Meters (m)</option>
                                     <option value="ft">Feet (ft)</option>
                                 </select>
                             </div>
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Slack (%)</Label>
-                                <Input type="number" min="0" max="100" v-model.number="planSlackPercent" class="rounded-xl h-9 px-2 text-[11px]" />
+                                <Input :disabled="isReadOnly" type="number" min="0" max="100" v-model.number="planSlackPercent" class="rounded-xl h-9 px-2 text-[11px]" />
                             </div>
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Height ({{ planScaleUnit }})</Label>
-                                <Input type="number" step="0.1" min="0" v-model.number="planRoomHeight" class="rounded-xl h-9 px-2 text-[11px]" />
+                                <Input :disabled="isReadOnly" type="number" step="0.1" min="0" v-model.number="planRoomHeight" class="rounded-xl h-9 px-2 text-[11px]" />
                             </div>
                         </div>
 
@@ -608,6 +616,7 @@ defineOptions({
                                 Draw a known reference line on the floor plan image to set exact physical coordinate ratios.
                             </p>
                             <Button 
+                                v-if="!isReadOnly"
                                 type="button" 
                                 @click="editorMode = 'calibrate'"
                                 variant="outline" 
@@ -630,6 +639,7 @@ defineOptions({
                         </div>
                         <div class="flex items-center gap-1">
                             <Button 
+                                v-if="!isReadOnly"
                                 @click="showManageTypesModal = true"
                                 size="sm" 
                                 variant="ghost" 
@@ -638,6 +648,7 @@ defineOptions({
                                 <Settings class="size-3 mr-1" /> Types
                             </Button>
                             <Button 
+                                v-if="!isReadOnly"
                                 @click="showCreateCableModal = true"
                                 size="sm" 
                                 variant="ghost" 
@@ -652,7 +663,7 @@ defineOptions({
                         <div 
                             v-for="cable in cablesList" 
                             :key="cable.id"
-                            @click="activeCableId = cable.id; editorMode = 'draw'"
+                            @click="activeCableId = cable.id; if (!isReadOnly) editorMode = 'draw'"
                             class="p-2.5 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 cursor-pointer flex justify-between items-center transition-all"
                             :class="activeCableId === cable.id ? 'border-[#1AC18C] bg-[#1AC18C]/5' : ''"
                         >
@@ -666,9 +677,10 @@ defineOptions({
                             <div class="flex items-center gap-2 shrink-0">
                                 <div class="text-right">
                                     <span class="text-xs font-bold text-foreground block">{{ calculateRunLength(cable).toFixed(1) }}{{ planScaleUnit }}</span>
-                                    <span v-if="getCableTypePrice(cable.type) > 0" class="text-[9px] text-muted-foreground block font-medium">${{ calculateRunCost(cable).toFixed(2) }}</span>
+                                    <span v-if="getCableTypePrice(cable.type) > 0" class="text-[9px] text-muted-foreground block font-medium">{{ (calculateRunCost(cable) || 0).toFixed(2) }}</span>
                                 </div>
                                 <button 
+                                    v-if="!isReadOnly"
                                     @click.stop="deleteCableRun(cable.id)"
                                     class="text-muted-foreground hover:text-red-500 cursor-pointer animate-none"
                                 >
@@ -707,13 +719,13 @@ defineOptions({
                         <div class="space-y-3.5 p-3.5 bg-muted/40 rounded-xl border border-border/40">
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Cable Name</Label>
-                                <Input v-model="activeCable.name" class="rounded-xl h-8 px-2 text-xs bg-card" />
+                                <Input :disabled="isReadOnly" v-model="activeCable.name" class="rounded-xl h-8 px-2 text-xs bg-card" />
                             </div>
                             
                             <div class="grid grid-cols-2 gap-2.5">
                                 <div class="space-y-1">
                                     <Label class="text-[10px] uppercase font-bold text-muted-foreground">Cable Type</Label>
-                                    <select v-model="activeCable.type" @change="onActiveCableTypeChange" class="flex h-8 w-full rounded-xl border border-input bg-card px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                                    <select :disabled="isReadOnly" v-model="activeCable.type" @change="onActiveCableTypeChange" class="flex h-8 w-full rounded-xl border border-input bg-card px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                                         <option v-for="type in cableTypes" :key="type.id" :value="type.name">
                                             {{ type.name }} (${{ type.price_per_m.toFixed(2) }}/{{ planScaleUnit }})
                                         </option>
@@ -722,7 +734,7 @@ defineOptions({
                                 <div class="space-y-1">
                                     <Label class="text-[10px] uppercase font-bold text-muted-foreground">Color Accent</Label>
                                     <div class="flex items-center gap-1.5">
-                                        <Input type="color" v-model="activeCable.color" class="rounded-xl h-8 p-1 cursor-pointer bg-card w-10 shrink-0 border border-input" />
+                                        <Input :disabled="isReadOnly" type="color" v-model="activeCable.color" class="rounded-xl h-8 p-1 cursor-pointer bg-card w-10 shrink-0 border border-input" />
                                         <span class="text-[9px] text-muted-foreground font-mono truncate uppercase">{{ activeCable.color }}</span>
                                     </div>
                                 </div>
@@ -730,7 +742,7 @@ defineOptions({
 
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Notes</Label>
-                                <textarea v-model="activeCable.notes" rows="2" class="flex w-full rounded-xl border border-input bg-card px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80" placeholder="e.g. conduit section..."></textarea>
+                                <textarea :disabled="isReadOnly" v-model="activeCable.notes" rows="2" class="flex w-full rounded-xl border border-input bg-card px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80" placeholder="e.g. conduit section..."></textarea>
                             </div>
                         </div>
 
@@ -738,9 +750,9 @@ defineOptions({
                         <div class="grid grid-cols-2 gap-2.5 items-end p-3.5 bg-muted/40 rounded-xl border border-border/40">
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Quantity</Label>
-                                <Input type="number" min="1" v-model.number="activeCable.qty" class="rounded-xl h-8 px-2 text-xs bg-card" />
+                                <Input :disabled="isReadOnly" type="number" min="1" v-model.number="activeCable.qty" class="rounded-xl h-8 px-2 text-xs bg-card" />
                             </div>
-                            <div>
+                            <div v-if="!isReadOnly">
                                 <Button 
                                     type="button" 
                                     @click="duplicateCableRun(activeCable)" 
@@ -763,6 +775,7 @@ defineOptions({
                                 <span class="font-bold text-muted-foreground">Pt {{ idx + 1 }}</span>
                                 <span class="text-[10px] text-muted-foreground font-mono">({{ p.x }}, {{ p.y }})</span>
                                 <button 
+                                    v-if="!isReadOnly"
                                     @click="removePoint(idx)" 
                                     class="text-muted-foreground hover:text-red-500 cursor-pointer"
                                 >
@@ -820,8 +833,8 @@ defineOptions({
                     <!-- Zoom & Editor Mode Toolbar -->
                     <div class="flex flex-wrap justify-between items-center gap-4 bg-muted/30 p-2.5 border border-border/40 rounded-xl">
                         <div class="flex items-center gap-2.5">
-                            <span class="text-xs font-bold text-muted-foreground">Mode:</span>
-                            <div class="inline-flex rounded-lg border border-border bg-card p-1">
+                            <span v-if="!isReadOnly" class="text-xs font-bold text-muted-foreground">Mode:</span>
+                            <div v-if="!isReadOnly" class="inline-flex rounded-lg border border-border bg-card p-1">
                                 <button 
                                     @click="editorMode = 'select'"
                                     class="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded-md cursor-pointer transition-colors"

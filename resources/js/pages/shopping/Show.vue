@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { 
     ShoppingBag, 
     ArrowLeft, 
@@ -45,6 +45,10 @@ interface ShoppingList {
 const props = defineProps<{
     list: ShoppingList;
 }>();
+
+const page = usePage();
+const userRole = computed(() => (page.props.auth as any).currentChurch?.pivot?.role || 'User');
+const isReadOnly = computed(() => userRole.value === 'User');
 
 // Editor / Form states
 const showItemModal = ref(false);
@@ -115,6 +119,7 @@ const copyShareLink = () => {
 };
 
 const togglePublicShare = () => {
+    if (isReadOnly.value) return;
     useForm({}).post(`/shopping-lists/${props.list.id}/toggle-share`, {
         preserveScroll: true
     });
@@ -182,6 +187,7 @@ defineOptions({
                 <div class="flex items-center gap-3">
                     <h1 class="font-bold text-2xl text-foreground">{{ list.name }}</h1>
                     <Button 
+                        v-if="!isReadOnly"
                         @click="showEditListModal = true" 
                         variant="ghost" 
                         size="sm" 
@@ -194,6 +200,7 @@ defineOptions({
             </div>
 
             <Button 
+                v-if="!isReadOnly"
                 @click="openAddItem"
                 class="bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-xl cursor-pointer text-xs self-start md:self-auto"
             >
@@ -247,7 +254,7 @@ defineOptions({
                                         {{ item.comments || '-' }}
                                     </td>
                                     <td class="py-3.5 px-4 text-right">
-                                        <div class="flex justify-end gap-1.5">
+                                        <div class="flex justify-end gap-1.5" v-if="!isReadOnly">
                                             <Button 
                                                 @click="openEditItem(item)" 
                                                 size="sm" 
@@ -301,8 +308,9 @@ defineOptions({
                             </div>
                             <button 
                                 @click="togglePublicShare"
+                                :disabled="isReadOnly"
                                 class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                                :class="list.share_token ? 'bg-[#1AC18C]' : 'bg-muted'"
+                                :class="[list.share_token ? 'bg-[#1AC18C]' : 'bg-muted', isReadOnly ? 'opacity-50 cursor-not-allowed' : '']"
                             >
                                 <span 
                                     class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
@@ -338,7 +346,7 @@ defineOptions({
                         <div v-if="list.share_token" class="space-y-3 pt-3 border-t border-border/40">
                             <span class="font-semibold text-xs text-foreground block">Share via Email notification</span>
                             
-                            <form @submit.prevent="submitShareEmail" class="flex gap-2">
+                            <form @submit.prevent="submitShareEmail" class="flex gap-2" v-if="!isReadOnly">
                                 <div class="flex-1">
                                     <Input 
                                         type="email" 
@@ -368,7 +376,7 @@ defineOptions({
                                         class="flex justify-between items-center p-2 bg-muted/30 border border-border/40 rounded-lg text-xs"
                                     >
                                         <span class="truncate max-w-[180px]" :title="email">{{ email }}</span>
-                                        <button @click="removeEmail(email)" class="text-muted-foreground hover:text-red-500 cursor-pointer">
+                                        <button v-if="!isReadOnly" @click="removeEmail(email)" class="text-muted-foreground hover:text-red-500 cursor-pointer">
                                             <X class="size-3.5" />
                                         </button>
                                     </div>

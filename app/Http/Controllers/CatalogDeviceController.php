@@ -2,16 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
 use App\Models\CatalogDevice;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class CatalogDeviceController extends Controller
 {
     public function store(Request $request): RedirectResponse
     {
-        if (! $request->user()->hasModuleAccess('racks')) {
+        if (! $request->user()->hasModuleAccess('racks') || ! $request->user()->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'Unauthorized.');
         }
 

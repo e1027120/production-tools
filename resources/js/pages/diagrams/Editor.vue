@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { 
     VueFlow, 
     useVueFlow, 
@@ -43,6 +43,10 @@ interface Diagram {
 const props = defineProps<{
     diagram: Diagram;
 }>();
+
+const page = usePage();
+const userRole = computed(() => (page.props.auth as any).currentChurch?.pivot?.role || 'User');
+const isReadOnly = computed(() => userRole.value === 'User');
 
 const nodes = ref<any[]>([]);
 const edges = ref<any[]>([]);
@@ -91,6 +95,7 @@ let activeDragEdge: any = null;
 let activeDragPtIdx = -1;
 
 const onWaypointMouseDown = (event: MouseEvent, edgeId: string, idx: number) => {
+    if (isReadOnly.value) return;
     const edge = edges.value.find(e => e.id === edgeId);
     if (!edge || !edge.data?.waypoints) {
         return;
@@ -135,6 +140,7 @@ const onWaypointMouseUp = () => {
 };
 
 const addWaypoint = () => {
+    if (isReadOnly.value) return;
     if (!selectedEdge.value) {
         return;
     }
@@ -349,6 +355,7 @@ const onEdgeUpdate = (params: any) => {
 
 // Node operations
 const addNodeToCanvas = () => {
+    if (isReadOnly.value) return;
     const id = `node-${Date.now()}`;
     
     // Default label if empty
@@ -553,6 +560,7 @@ const handleBlueprintImport = (event: Event) => {
                     @change="handleBlueprintImport"
                 />
                 <Button 
+                    v-if="!isReadOnly"
                     @click="triggerBlueprintImport" 
                     variant="outline"
                     class="rounded-xl text-xs h-8.5 border-border/60 hover:bg-muted/40 cursor-pointer"
@@ -571,6 +579,7 @@ const handleBlueprintImport = (event: Event) => {
                 </Button>
 
                 <Button 
+                    v-if="!isReadOnly"
                     @click="submitSave"
                     :disabled="isSaving"
                     class="bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-xl cursor-pointer text-xs h-8.5"
@@ -589,7 +598,9 @@ const handleBlueprintImport = (event: Event) => {
                 <VueFlow
                     v-model:nodes="nodes"
                     v-model:edges="edges"
-                    :edges-updatable="true"
+                    :edges-updatable="!isReadOnly"
+                    :nodes-draggable="!isReadOnly"
+                    :nodes-connectable="!isReadOnly"
                     @connect="onConnect"
                     @edge-update="onEdgeUpdate"
                     @pane-click="onPaneClick"
@@ -690,7 +701,7 @@ const handleBlueprintImport = (event: Event) => {
             <!-- Properties Sidebar Panel (Right) -->
             <aside class="w-76 border-l border-border bg-card h-full overflow-y-auto p-4 flex flex-col gap-5 shrink-0 z-10 shadow-sm">
                 <!-- Section 1: Add Hardware Node -->
-                <div class="space-y-3.5">
+                <div v-if="!isReadOnly" class="space-y-3.5">
                     <h2 class="font-bold text-xs uppercase text-muted-foreground tracking-wider flex items-center gap-1">
                         <Plus class="size-4 text-primary" /> Add Node
                     </h2>
@@ -820,7 +831,7 @@ const handleBlueprintImport = (event: Event) => {
                 </div>
 
                 <!-- Section 2: Active Cable Tool -->
-                <div class="space-y-3.5 border-t border-border/60 pt-4">
+                <div v-if="!isReadOnly" class="space-y-3.5 border-t border-border/60 pt-4">
                     <h2 class="font-bold text-xs uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
                         <span class="size-2 rounded-full" :style="{ backgroundColor: activeCableColor }"></span>
                         Active Connection Cable
@@ -855,6 +866,7 @@ const handleBlueprintImport = (event: Event) => {
                         <div class="space-y-1">
                             <Label class="text-[10px] uppercase font-bold text-muted-foreground">Rename Node</Label>
                             <Input 
+                                :disabled="isReadOnly"
                                 v-model="selectedNode.data.label"
                                 @input="updateSelectedNodeProperties"
                                 class="rounded-lg text-xs h-8 bg-background"
@@ -864,6 +876,7 @@ const handleBlueprintImport = (event: Event) => {
                         <div class="space-y-1">
                             <Label class="text-[10px] uppercase font-bold text-muted-foreground">Device Type</Label>
                             <select 
+                                :disabled="isReadOnly"
                                 v-model="selectedNode.data.typeLabel"
                                 class="flex h-8 w-full rounded-lg border border-input bg-background px-2.5 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
                             >
@@ -877,7 +890,7 @@ const handleBlueprintImport = (event: Event) => {
                             </select>
                         </div>
 
-                        <div class="space-y-1">
+                        <div class="space-y-1" v-if="!isReadOnly">
                             <Label class="text-[10px] uppercase font-bold text-muted-foreground">Form Shape</Label>
                             <div class="grid grid-cols-2 gap-1">
                                 <Button 
@@ -919,7 +932,7 @@ const handleBlueprintImport = (event: Event) => {
                             </div>
                         </div>
 
-                        <div class="space-y-1">
+                        <div class="space-y-1" v-if="!isReadOnly">
                             <Label class="text-[10px] uppercase font-bold text-muted-foreground">Color Theme</Label>
                             <div class="flex items-center gap-2">
                                 <button 
@@ -946,6 +959,7 @@ const handleBlueprintImport = (event: Event) => {
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Inputs (1-16)</Label>
                                 <Input 
+                                    :disabled="isReadOnly"
                                     type="number"
                                     v-model.number="selectedNode.data.inputs"
                                     min="1"
@@ -956,6 +970,7 @@ const handleBlueprintImport = (event: Event) => {
                             <div class="space-y-1">
                                 <Label class="text-[10px] uppercase font-bold text-muted-foreground">Outputs (1-16)</Label>
                                 <Input 
+                                    :disabled="isReadOnly"
                                     type="number"
                                     v-model.number="selectedNode.data.outputs"
                                     min="1"
@@ -966,6 +981,7 @@ const handleBlueprintImport = (event: Event) => {
                         </div>
 
                         <Button 
+                            v-if="!isReadOnly"
                             type="button"
                             @click="deleteSelectedNode"
                             class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-lg cursor-pointer text-xs h-8 mt-2"
@@ -982,6 +998,7 @@ const handleBlueprintImport = (event: Event) => {
                         <div class="space-y-1">
                             <Label class="text-[10px] uppercase font-bold text-muted-foreground">Cable Connection Type</Label>
                             <select 
+                                :disabled="isReadOnly"
                                 :value="selectedEdge.data?.cableType || 'generic'"
                                 @change="updateSelectedEdgeCableType"
                                 class="flex h-8 w-full rounded-lg border border-input bg-background px-2.5 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
@@ -1005,12 +1022,14 @@ const handleBlueprintImport = (event: Event) => {
                                     <span class="text-[9px] font-bold font-mono text-muted-foreground w-4">#{{ idx + 1 }}</span>
                                     <div class="flex items-center gap-1 flex-1">
                                         <input 
+                                            :disabled="isReadOnly"
                                             type="number"
                                             v-model.number="pt.x"
                                             class="w-full text-[10px] h-6 bg-muted px-1.5 rounded border-0 focus:ring-1 focus:ring-[#1AC18C]/80 font-mono"
                                             placeholder="X"
                                         />
                                         <input 
+                                            :disabled="isReadOnly"
                                             type="number"
                                             v-model.number="pt.y"
                                             class="w-full text-[10px] h-6 bg-muted px-1.5 rounded border-0 focus:ring-1 focus:ring-[#1AC18C]/80 font-mono"
@@ -1018,6 +1037,7 @@ const handleBlueprintImport = (event: Event) => {
                                         />
                                     </div>
                                     <Button 
+                                        v-if="!isReadOnly"
                                         type="button"
                                         size="sm"
                                         variant="ghost"
@@ -1029,7 +1049,7 @@ const handleBlueprintImport = (event: Event) => {
                                 </div>
                             </div>
 
-                            <div class="flex gap-1.5 mt-2">
+                            <div class="flex gap-1.5 mt-2" v-if="!isReadOnly">
                                 <Button 
                                     type="button"
                                     @click="addWaypoint"
@@ -1041,6 +1061,7 @@ const handleBlueprintImport = (event: Event) => {
                         </div>
 
                         <Button 
+                            v-if="!isReadOnly"
                             type="button"
                             @click="deleteSelectedEdge"
                             class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-lg cursor-pointer text-xs h-8 mt-2"

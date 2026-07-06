@@ -46,7 +46,7 @@ class DiagramController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('diagrams')) {
+        if (! $user->hasModuleAccess('diagrams') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -110,7 +110,7 @@ class DiagramController extends Controller
     public function update(Request $request, Diagram $diagram): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('diagrams')) {
+        if (! $user->hasModuleAccess('diagrams') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -139,7 +139,7 @@ class DiagramController extends Controller
     public function destroy(Request $request, Diagram $diagram): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('diagrams')) {
+        if (! $user->hasModuleAccess('diagrams') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 

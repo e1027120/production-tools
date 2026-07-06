@@ -56,7 +56,7 @@ class CablePlanController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('cables')) {
+        if (! $user->hasModuleAccess('cables') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -124,7 +124,7 @@ class CablePlanController extends Controller
     public function update(Request $request, CablePlan $cablePlan): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('cables')) {
+        if (! $user->hasModuleAccess('cables') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -163,7 +163,7 @@ class CablePlanController extends Controller
     public function destroy(Request $request, CablePlan $cablePlan): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('cables')) {
+        if (! $user->hasModuleAccess('cables') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -186,7 +186,7 @@ class CablePlanController extends Controller
     public function upload(Request $request, CablePlan $cablePlan): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('cables')) {
+        if (! $user->hasModuleAccess('cables') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -217,7 +217,7 @@ class CablePlanController extends Controller
     public function typesStore(Request $request): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('cables')) {
+        if (! $user->hasModuleAccess('cables') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'You do not have access to this module.');
         }
 
@@ -248,7 +248,7 @@ class CablePlanController extends Controller
     public function typesUpdate(Request $request, CableType $cableType): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('cables') || $cableType->church_id !== $user->current_church_id) {
+        if (! $user->hasModuleAccess('cables') || $cableType->church_id !== $user->current_church_id || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'Unauthorized.');
         }
 
@@ -300,7 +300,7 @@ class CablePlanController extends Controller
     public function typesDestroy(Request $request, CableType $cableType): RedirectResponse
     {
         $user = $request->user();
-        if (! $user->hasModuleAccess('cables') || $cableType->church_id !== $user->current_church_id) {
+        if (! $user->hasModuleAccess('cables') || $cableType->church_id !== $user->current_church_id || ! $user->hasChurchRole(['Admin', 'Manager'])) {
             abort(403, 'Unauthorized.');
         }
 
