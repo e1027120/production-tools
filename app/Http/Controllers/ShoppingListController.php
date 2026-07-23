@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Asset;
 use App\Models\ShoppingList;
 use App\Models\ShoppingListItem;
 use Illuminate\Http\RedirectResponse;
@@ -342,6 +343,59 @@ class ShoppingListController extends Controller
                 }),
                 'total_price' => $list->items->sum('total_price'),
             ],
+        ]);
+    }
+
+    /**
+     * Migrate a shopping list item to the Asset Manager.
+     */
+    public function migrateItem(Request $request, ShoppingList $shoppingList, ShoppingListItem $item): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user->hasModuleAccess('shopping_lists') || ! $user->hasModuleAccess('assets') || ! $user->hasChurchRole(['Admin', 'Manager'])) {
+            abort(403, 'Unauthorized operation.');
+        }
+
+        if ($shoppingList->church_id !== $user->current_church_id || $item->shopping_list_id !== $shoppingList->id) {
+            abort(403, 'Unauthorized access.');
+        }
+
+        $validated = $request->validate([
+            'category' => ['required', 'string', 'in:Audio,Video,Lighting,IT,Instrument,Stage,Other'],
+            'status' => ['required', 'string', 'in:Active,Maintenance,Retired,In Storage'],
+            'location' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $createdIds = [];
+        $qty = $item->quantity ?: 1;
+
+        for ($i = 0; $i < $qty; $i++) {
+            $name = $qty > 1 ? $item->name.' ('.($i + 1).')' : $item->name;
+            $notes = trim('Migrated from shopping list: '.$shoppingList->name.
+                ($item->comments ? "\nComments: ".$item->comments : '').
+                ($item->link ? "\nLink: ".$item->link : '')
+            );
+
+            $asset = Asset::create([
+                'church_id' => $user->current_church_id,
+                'name' => $name,
+                'category' => $validated['category'],
+                'brand' => null,
+                'model' => null,
+                'serial_number' => null,
+                'status' => $validated['status'],
+                'location' => $validated['location'] ?? null,
+                'purchase_date' => now(),
+                'purchase_price' => $item->unit_price,
+                'notes' => $notes,
+                'created_by' => $user->id,
+            ]);
+
+            $createdIds[] = $asset->id;
+        }
+
+        return redirect()->route('assets.index', [
+            'review_ids' => implode(',', $createdIds),
         ]);
     }
 }

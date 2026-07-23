@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AssetController;
 use App\Http\Controllers\CablePlanController;
 use App\Http\Controllers\CatalogDeviceController;
 use App\Http\Controllers\ChurchController;
@@ -8,10 +9,12 @@ use App\Http\Controllers\DiagramLibraryController;
 use App\Http\Controllers\RackController;
 use App\Http\Controllers\ShoppingListController;
 use App\Http\Controllers\TrainingController;
+use App\Models\Asset;
 use App\Models\CablePlan;
 use App\Models\CatalogDevice;
 use App\Models\Diagram;
 use App\Models\Rack;
+use App\Models\ServiceReminder;
 use App\Models\ShoppingList;
 use App\Models\Training;
 use App\Models\TrainingAssignment;
@@ -132,6 +135,23 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
             ];
         })->values();
 
+        // 6. Assets Module
+        $assets = Asset::where('church_id', $churchId)->get();
+        $totalAssets = $assets->count();
+        $assetsInMaintenance = $assets->where('status', 'Maintenance')->count();
+        $pendingReminders = ServiceReminder::where('church_id', $churchId)
+            ->where('status', 'Active')
+            ->where('next_due_date', '<=', now()->addDays(7))
+            ->count();
+        $latestAssets = $assets->sortByDesc('id')->take(3)->map(function ($a) {
+            return [
+                'id' => $a->id,
+                'name' => $a->name,
+                'category' => $a->category,
+                'status' => $a->status,
+            ];
+        })->values();
+
         return Inertia::render('Dashboard', [
             'stats' => [
                 'totalRacks' => $totalRacks,
@@ -147,12 +167,16 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
                 'totalCablePlans' => $totalCablePlans,
                 'totalCableRuns' => $totalCableRuns,
                 'totalCablesLength' => $totalCablesLength,
+                'totalAssets' => $totalAssets,
+                'assetsInMaintenance' => $assetsInMaintenance,
+                'pendingReminders' => $pendingReminders,
             ],
             'latestRacks' => $latestRacks,
             'latestShoppingLists' => $latestShoppingLists,
             'latestTrainings' => $latestTrainings,
             'latestDiagrams' => $latestDiagrams,
             'latestCablePlans' => $latestCablePlans,
+            'latestAssets' => $latestAssets,
         ]);
     })->name('dashboard');
 
@@ -187,6 +211,7 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
     Route::post('shopping-lists/{shopping_list}/items', [ShoppingListController::class, 'addItem'])->name('shopping-lists.items.add');
     Route::put('shopping-lists/{shopping_list}/items/{item}', [ShoppingListController::class, 'updateItem'])->name('shopping-lists.items.update');
     Route::delete('shopping-lists/{shopping_list}/items/{item}', [ShoppingListController::class, 'removeItem'])->name('shopping-lists.items.remove');
+    Route::post('shopping-lists/{shopping_list}/items/{item}/migrate', [ShoppingListController::class, 'migrateItem'])->name('shopping-lists.items.migrate');
     Route::post('shopping-lists/{shopping_list}/toggle-share', [ShoppingListController::class, 'toggleShare'])->name('shopping-lists.toggle-share');
     Route::post('shopping-lists/{shopping_list}/share-email', [ShoppingListController::class, 'shareEmail'])->name('shopping-lists.share-email');
     Route::post('shopping-lists/{shopping_list}/remove-shared-email', [ShoppingListController::class, 'removeSharedEmail'])->name('shopping-lists.remove-shared-email');
@@ -199,6 +224,12 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
     Route::post('cable-types', [CablePlanController::class, 'typesStore'])->name('cable-types.store');
     Route::put('cable-types/{cable_type}', [CablePlanController::class, 'typesUpdate'])->name('cable-types.update');
     Route::delete('cable-types/{cable_type}', [CablePlanController::class, 'typesDestroy'])->name('cable-types.destroy');
+
+    // Asset Manager Module
+    Route::resource('assets', AssetController::class);
+    Route::post('assets/{asset}/logs', [AssetController::class, 'storeLog'])->name('assets.logs.store');
+    Route::post('assets/{asset}/reminders', [AssetController::class, 'storeReminder'])->name('assets.reminders.store');
+    Route::post('assets/{asset}/reminders/{reminder}/complete', [AssetController::class, 'completeReminder'])->name('assets.reminders.complete');
 });
 
 // Public Guest Route for Shared Shopping Lists

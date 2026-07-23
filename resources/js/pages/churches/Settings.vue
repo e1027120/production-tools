@@ -243,7 +243,7 @@ defineOptions({
                                                 :key="mod"
                                                 class="px-2 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-bold uppercase tracking-wider border border-border"
                                             >
-                                                {{ mod === 'racks' ? 'Rack Builder' : (mod === 'shopping_lists' ? 'Shopping Lists' : (mod === 'cables' ? 'Cable Calculator' : mod)) }}
+                                                {{ mod === 'racks' ? 'Rack Builder' : (mod === 'shopping_lists' ? 'Shopping Lists' : (mod === 'cables' ? 'Cable Calculator' : (mod === 'assets' ? 'Asset Manager' : mod))) }}
                                             </span>
                                             <span 
                                                 v-if="member.modules.length === 0" 
@@ -386,6 +386,19 @@ defineOptions({
                                     <span class="text-[10px] text-muted-foreground block font-normal">Draw conduits and calculate lengths on floor plans.</span>
                                 </Label>
                             </div>
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/40 border border-border/40">
+                                <input 
+                                    id="mod-assets" 
+                                    type="checkbox" 
+                                    value="assets" 
+                                    v-model="memberForm.modules"
+                                    class="size-4.5 rounded border-input text-primary focus:ring-primary cursor-pointer"
+                                />
+                                <Label for="mod-assets" class="cursor-pointer">
+                                    <span class="font-semibold text-xs text-foreground block">Asset Manager</span>
+                                    <span class="text-[10px] text-muted-foreground block font-normal">Track physical gear, schedule service reminders and maintenance logs.</span>
+                                </Label>
+                            </div>
                         </div>
                     </div>
 
@@ -494,6 +507,19 @@ defineOptions({
                                 <Label for="edit-mod-cables" class="cursor-pointer">
                                     <span class="font-semibold text-xs text-foreground block">Cable Calculator</span>
                                     <span class="text-[10px] text-muted-foreground block font-normal">Draw conduits and calculate lengths on floor plans.</span>
+                                </Label>
+                            </div>
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/40 border border-border/40">
+                                <input 
+                                    id="edit-mod-assets" 
+                                    type="checkbox" 
+                                    value="assets" 
+                                    v-model="editForm.modules"
+                                    class="size-4.5 rounded border-input text-primary focus:ring-primary cursor-pointer"
+                                />
+                                <Label for="edit-mod-assets" class="cursor-pointer">
+                                    <span class="font-semibold text-xs text-foreground block">Asset Manager</span>
+                                    <span class="text-[10px] text-muted-foreground block font-normal">Track physical gear, schedule service reminders and maintenance logs.</span>
                                 </Label>
                             </div>
                         </div>

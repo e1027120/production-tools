@@ -13,7 +13,8 @@ import {
     Copy, 
     Check, 
     X,
-    Save
+    Save,
+    Package
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -102,6 +103,32 @@ const deleteItem = (item: ShoppingListItem) => {
     if (confirm(`Remove ${item.name} from list?`)) {
         useForm({}).delete(`/shopping-lists/${props.list.id}/items/${item.id}`);
     }
+};
+
+// Migration Modal & Form state
+const showMigrateModal = ref(false);
+const migrateTargetItem = ref<ShoppingListItem | null>(null);
+
+const migrateForm = useForm({
+    category: 'Audio',
+    status: 'In Storage',
+    location: '',
+});
+
+const openMigrateModal = (item: ShoppingListItem) => {
+    migrateTargetItem.value = item;
+    migrateForm.reset();
+    showMigrateModal.value = true;
+};
+
+const submitMigrate = () => {
+    if (!migrateTargetItem.value) return;
+    
+    migrateForm.post(`/shopping-lists/${props.list.id}/items/${migrateTargetItem.value.id}/migrate`, {
+        onSuccess: () => {
+            showMigrateModal.value = false;
+        }
+    });
 };
 
 // Share toggles
@@ -255,6 +282,15 @@ defineOptions({
                                     </td>
                                     <td class="py-3.5 px-4 text-right">
                                         <div class="flex justify-end gap-1.5" v-if="!isReadOnly">
+                                            <Button 
+                                                @click="openMigrateModal(item)" 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                class="size-8 p-0 hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-500 rounded-lg"
+                                                title="Migrate to Asset Manager"
+                                            >
+                                                <Package class="size-3.5" />
+                                            </Button>
                                             <Button 
                                                 @click="openEditItem(item)" 
                                                 size="sm" 
@@ -512,6 +548,86 @@ defineOptions({
                         <Button type="button" @click="showEditListModal = false" variant="outline" class="rounded-xl cursor-pointer">Cancel</Button>
                         <Button type="submit" :disabled="listForm.processing" class="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl cursor-pointer">
                             <Save class="size-4 mr-1.5" /> Save Changes
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- MODAL: Migrate Item to Asset Manager -->
+        <div v-if="showMigrateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div class="bg-card border border-border/60 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div class="px-6 py-4 border-b border-border/40 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <Package class="size-5 text-primary animate-pulse" />
+                        <h3 class="font-bold text-base text-foreground">Migrate to Asset Manager</h3>
+                    </div>
+                    <button @click="showMigrateModal = false" class="text-muted-foreground hover:text-foreground text-xl leading-none cursor-pointer">&times;</button>
+                </div>
+                <form @submit.prevent="submitMigrate" class="p-6 space-y-4">
+                    <div class="text-xs text-muted-foreground leading-normal">
+                        You are migrating the item <strong class="text-foreground font-bold">"{{ migrateTargetItem?.name }}"</strong>. Since the shopping list quantity is <strong>{{ migrateTargetItem?.quantity }}</strong>, this will create <strong>{{ migrateTargetItem?.quantity }}</strong> distinct asset(s) in your Asset Manager.
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <Label for="mig-category" class="text-xs text-foreground font-bold">Initial Category</Label>
+                            <select 
+                                id="mig-category"
+                                v-model="migrateForm.category"
+                                class="flex w-full rounded-xl border border-input bg-card px-3 py-2 text-xs shadow-sm h-9 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                            >
+                                <option value="Audio">Audio</option>
+                                <option value="Video">Video</option>
+                                <option value="Lighting">Lighting</option>
+                                <option value="IT">IT</option>
+                                <option value="Instrument">Instrument</option>
+                                <option value="Stage">Stage</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1.5">
+                            <Label for="mig-status" class="text-xs text-foreground font-bold">Initial Status</Label>
+                            <select 
+                                id="mig-status"
+                                v-model="migrateForm.status"
+                                class="flex w-full rounded-xl border border-input bg-card px-3 py-2 text-xs shadow-sm h-9 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                            >
+                                <option value="In Storage">In Storage</option>
+                                <option value="Active">Active</option>
+                                <option value="Maintenance">Maintenance</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <Label for="mig-location" class="text-xs text-foreground font-bold">Initial Location (Optional)</Label>
+                        <Input 
+                            id="mig-location" 
+                            v-model="migrateForm.location" 
+                            placeholder="e.g. Sanctuary Storage Loft" 
+                            class="rounded-xl h-9 text-xs"
+                        />
+                    </div>
+
+                    <div class="text-[11px] text-amber-500 bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl leading-normal">
+                        After migrating, you will be redirected to a filtered specs verification page to add brand, model, and serial numbers.
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-border/40">
+                        <Button 
+                            type="button" 
+                            @click="showMigrateModal = false" 
+                            variant="outline" 
+                            class="rounded-xl text-xs h-9 cursor-pointer"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            type="submit" 
+                            :disabled="migrateForm.processing" 
+                            class="bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-xl text-xs h-9 cursor-pointer"
+                        >
+                            {{ migrateForm.processing ? 'Migrating...' : 'Migrate' }}
                         </Button>
                     </div>
                 </form>

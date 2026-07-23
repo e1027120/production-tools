@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
 import { dashboard } from '@/routes';
-import { Server, Layers, Zap, Sliders, ArrowRight, ShoppingBag, FileText, Share2, DollarSign, GraduationCap, Network, Activity, Ruler } from '@lucide/vue';
+import { Server, Layers, Zap, Sliders, ArrowRight, ShoppingBag, FileText, Share2, DollarSign, GraduationCap, Network, Activity, Ruler, Package } from '@lucide/vue';
 
 defineProps<{
     stats: {
@@ -20,6 +20,9 @@ defineProps<{
         totalCablePlans: number;
         totalCableRuns: number;
         totalCablesLength: number;
+        totalAssets: number;
+        assetsInMaintenance: number;
+        pendingReminders: number;
     };
     latestRacks: Array<{
         id: number;
@@ -53,6 +56,12 @@ defineProps<{
         length: number;
         unit: string;
     }>;
+    latestAssets: Array<{
+        id: number;
+        name: string;
+        category: string;
+        status: string;
+    }>;
 }>();
 
 const formatCurrency = (val: number) => {
@@ -70,6 +79,7 @@ const hasTrainingsAccess = computed(() => ['Admin', 'Manager'].includes(userRole
 const hasDiagramsAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('diagrams'));
 const hasShoppingAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('shopping_lists'));
 const hasCablesAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('cables'));
+const hasAssetsAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('assets'));
 
 defineOptions({
     layout: {
@@ -88,7 +98,7 @@ defineOptions({
 
     <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <!-- Welcoming Empty State if No Modules Active -->
-        <div v-if="!hasRacksAccess && !hasShoppingAccess && !hasTrainingsAccess && !hasDiagramsAccess && !hasCablesAccess" class="flex flex-col justify-center items-center text-center p-12 border border-dashed border-border/80 rounded-2xl bg-card min-h-[400px] space-y-4">
+        <div v-if="!hasRacksAccess && !hasShoppingAccess && !hasTrainingsAccess && !hasDiagramsAccess && !hasCablesAccess && !hasAssetsAccess" class="flex flex-col justify-center items-center text-center p-12 border border-dashed border-border/80 rounded-2xl bg-card min-h-[400px] space-y-4">
             <div class="size-16 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
                 <Sliders class="size-8 animate-pulse text-[#1AC18C]" />
             </div>
@@ -425,7 +435,83 @@ defineOptions({
                 </div>
             </div>
 
-            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border min-h-[320px] overflow-hidden">
+            <!-- Asset Manager Widget Card -->
+            <div v-if="hasAssetsAccess" class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
+                <!-- Decorative background elements -->
+                <div class="absolute -right-4 -top-4 size-24 rounded-full bg-[#1AC18C]/5 group-hover:scale-125 transition-transform duration-500 blur-xl"></div>
+                
+                <div class="relative space-y-3 flex-1">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <div class="size-8 rounded-lg bg-[#1AC18C]/10 flex items-center justify-center text-[#1AC18C]">
+                                <Package class="size-4.5" />
+                            </div>
+                            <span class="font-bold text-sm tracking-tight text-foreground">Asset Manager</span>
+                        </div>
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 uppercase tracking-wider">
+                            Active
+                        </span>
+                    </div>
+
+                    <!-- Stats grid -->
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-2 pt-1 pb-3 border-b border-sidebar-border/30">
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <Package class="size-3.5 text-muted-foreground shrink-0" />
+                            <span class="text-muted-foreground">Assets:</span>
+                            <span class="font-bold text-foreground">{{ stats.totalAssets }}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <Activity class="size-3.5 text-muted-foreground shrink-0" />
+                            <span class="text-muted-foreground">Service:</span>
+                            <span class="font-bold text-foreground">{{ stats.assetsInMaintenance }}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-xs col-span-2">
+                            <Sliders class="size-3.5 text-red-500 shrink-0 animate-pulse" />
+                            <span class="text-muted-foreground font-semibold">Reminders (7d):</span>
+                            <span class="font-bold text-red-500">{{ stats.pendingReminders }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Quick List Table -->
+                    <div class="space-y-2 pt-2">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex justify-between">
+                            <span>Latest Assets</span>
+                            <span>Status</span>
+                        </div>
+                        <div class="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                            <div v-for="asset in latestAssets" :key="asset.id" class="flex justify-between items-center text-xs group/item hover:bg-muted/40 p-1.5 rounded-lg transition-colors">
+                                <Link :href="`/assets/${asset.id}`" class="font-semibold text-foreground hover:text-[#1AC18C] transition-colors truncate max-w-[155px]" title="View asset spec sheet">
+                                    {{ asset.name }}
+                                </Link>
+                                <span 
+                                    class="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0"
+                                    :class="{
+                                        'bg-emerald-500/10 text-emerald-500': asset.status === 'Active',
+                                        'bg-amber-500/10 text-amber-500': asset.status === 'Maintenance',
+                                        'bg-blue-500/10 text-blue-500': asset.status === 'In Storage',
+                                        'bg-red-500/10 text-red-500': asset.status === 'Retired',
+                                    }"
+                                >
+                                    {{ asset.status }}
+                                </span>
+                            </div>
+                            <div v-if="latestAssets.length === 0" class="text-[11px] text-muted-foreground italic text-center py-2">
+                                No assets registered yet.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="relative pt-4 mt-auto border-t border-sidebar-border/30">
+                    <Link href="/assets" class="w-full inline-flex items-center justify-center rounded-lg bg-[#22273C] dark:bg-muted text-white dark:text-foreground text-xs font-semibold px-4 py-2 hover:bg-[#1AC18C] hover:text-white dark:hover:bg-[#1AC18C] dark:hover:text-white transition-all duration-200 shadow-sm cursor-pointer group/btn">
+                        Open Manager
+                        <ArrowRight class="ml-1.5 size-3.5 group-hover/btn:translate-x-0.5 transition-transform duration-200" />
+                    </Link>
+                </div>
+            </div>
+
+            <!-- Fallback Placeholder if user lacks asset rights -->
+            <div v-else class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border min-h-[320px] overflow-hidden">
                 <PlaceholderPattern />
             </div>
         </div>
