@@ -88,7 +88,7 @@ onMounted(() => {
 });
 
 // Viewport and custom edge drawing setup
-const { viewport } = useVueFlow();
+const { viewport, project } = useVueFlow();
 
 let dragStartMouseX = 0;
 let dragStartMouseY = 0;
@@ -495,15 +495,34 @@ const onNodeDragStop = (event: any) => {
     if (layoutMode.value === 'semi-auto') {
         node.position.x = Math.round(node.position.x / 16) * 16;
         node.position.y = Math.round(node.position.y / 16) * 16;
-        
-        edges.value.forEach(edge => {
-            if (edge.source === node.id || edge.target === node.id) {
-                if (edge.data) {
-                    edge.data.waypoints = [];
-                }
-            }
-        });
     }
+};
+
+const handleEdgeDoubleClick = (event: MouseEvent, edgeId: string) => {
+    if (isReadOnly.value) return;
+    
+    const edge = edges.value.find(e => e.id === edgeId);
+    if (!edge) return;
+    
+    if (!edge.data) {
+        edge.data = {};
+    }
+    if (!edge.data.waypoints) {
+        edge.data.waypoints = [];
+    }
+    
+    const projected = project({
+        x: event.clientX,
+        y: event.clientY
+    });
+    
+    const ptX = layoutMode.value === 'semi-auto' ? Math.round(projected.x / 16) * 16 : Math.round(projected.x);
+    const ptY = layoutMode.value === 'semi-auto' ? Math.round(projected.y / 16) * 16 : Math.round(projected.y);
+    
+    edge.data.waypoints.push({ x: ptX, y: ptY });
+    
+    selectedEdgeId.value = edgeId;
+    selectedNodeId.value = null;
 };
 
 const getSourceNodeOutputsCount = (sourceId: string) => {
@@ -965,6 +984,7 @@ const handleBlueprintImport = (event: Event) => {
                             stroke-width="16"
                             class="vue-flow__edge-interaction"
                             style="pointer-events: stroke !important; cursor: pointer;"
+                            @dblclick="handleEdgeDoubleClick($event, id)"
                         />
                         <g v-if="selected && data?.waypoints">
                             <g
@@ -1431,13 +1451,22 @@ const handleBlueprintImport = (event: Event) => {
                                 </div>
                             </div>
 
-                            <div class="flex gap-1.5 mt-2" v-if="!isReadOnly">
+                            <div class="flex flex-col gap-1.5 mt-2" v-if="!isReadOnly">
                                 <Button 
                                     type="button"
                                     @click="addWaypoint"
-                                    class="flex-1 bg-[#22273C] hover:bg-[#22273C]/90 text-white font-bold rounded-lg cursor-pointer text-[10px] h-7"
+                                    class="w-full bg-[#22273C] hover:bg-[#22273C]/90 text-white font-bold rounded-lg cursor-pointer text-[10px] h-7"
                                 >
                                     <Plus class="mr-1 size-3" /> Add Point
+                                </Button>
+
+                                <Button 
+                                    v-if="selectedEdge.data?.waypoints && selectedEdge.data.waypoints.length > 0"
+                                    type="button"
+                                    @click="selectedEdge.data.waypoints = []"
+                                    class="w-full bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 font-bold rounded-lg cursor-pointer text-[10px] h-7"
+                                >
+                                    <SlidersHorizontal class="mr-1.5 size-3" /> Straighten Connection
                                 </Button>
                             </div>
                         </div>
