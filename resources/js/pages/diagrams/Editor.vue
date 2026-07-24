@@ -19,7 +19,8 @@ import {
     Info,
     Check,
     Download,
-    Upload
+    Upload,
+    Table
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,6 +64,7 @@ onMounted(() => {
             if (node.data.outputs === undefined) {
                 node.data.outputs = 1;
             }
+            ensurePortDetailsInitialized(node);
             return node;
         });
         edges.value = (props.diagram.data.edges || []).map((edge: any) => {
@@ -314,6 +316,107 @@ const selectedEdge = computed(() => {
     return edges.value.find(e => e.id === selectedEdgeId.value) || null;
 });
 
+// Detailed I/O Table Modal State & Logic
+const showIoModal = ref(false);
+
+const ensurePortDetailsInitialized = (node: any) => {
+    if (!node) return;
+    if (!node.data) {
+        node.data = {};
+    }
+    if (!node.data.portDetails) {
+        node.data.portDetails = {
+            inputs: {},
+            outputs: {}
+        };
+    }
+    if (!node.data.portDetails.inputs) {
+        node.data.portDetails.inputs = {};
+    }
+    if (!node.data.portDetails.outputs) {
+        node.data.portDetails.outputs = {};
+    }
+    
+    const numInputs = node.data.inputs || 1;
+    for (let i = 1; i <= numInputs; i++) {
+        const key = `in-${i}`;
+        if (!node.data.portDetails.inputs[key]) {
+            node.data.portDetails.inputs[key] = { name: '', description: '' };
+        }
+    }
+    
+    const numOutputs = node.data.outputs || 1;
+    for (let i = 1; i <= numOutputs; i++) {
+        const key = `out-${i}`;
+        if (!node.data.portDetails.outputs[key]) {
+            node.data.portDetails.outputs[key] = { name: '', description: '' };
+        }
+    }
+};
+
+const getPortConnectionInfo = (nodeId: string, type: 'in' | 'out', portIndex: number) => {
+    const handleId = `${type}-${portIndex}`;
+    
+    if (type === 'in') {
+        const edge = edges.value.find(e => e.target === nodeId && e.targetHandle === handleId);
+        if (!edge) return null;
+        
+        const sourceNode = nodes.value.find(n => n.id === edge.source);
+        const sourceNodeLabel = sourceNode ? sourceNode.data.label : 'Unknown Device';
+        
+        let sourcePortDesc = '';
+        if (edge.sourceHandle) {
+            const match = edge.sourceHandle.match(/out-(\d+)/);
+            if (match) {
+                sourcePortDesc = `Output #${match[1]}`;
+            } else {
+                sourcePortDesc = edge.sourceHandle;
+            }
+        }
+        
+        const cableKey = edge.data?.cableType || 'generic';
+        const cableLabel = cableTypes[cableKey]?.label || 'Generic';
+        
+        return {
+            description: `From: ${sourceNodeLabel} (${sourcePortDesc})`,
+            cable: cableLabel,
+            color: cableTypes[cableKey]?.color || '#6B7280'
+        };
+    } else {
+        const edge = edges.value.find(e => e.source === nodeId && e.sourceHandle === handleId);
+        if (!edge) return null;
+        
+        const targetNode = nodes.value.find(n => n.id === edge.target);
+        const targetNodeLabel = targetNode ? targetNode.data.label : 'Unknown Device';
+        
+        let targetPortDesc = '';
+        if (edge.targetHandle) {
+            const match = edge.targetHandle.match(/in-(\d+)/);
+            if (match) {
+                targetPortDesc = `Input #${match[1]}`;
+            } else {
+                targetPortDesc = edge.targetHandle;
+            }
+        }
+        
+        const cableKey = edge.data?.cableType || 'generic';
+        const cableLabel = cableTypes[cableKey]?.label || 'Generic';
+        
+        return {
+            description: `To: ${targetNodeLabel} (${targetPortDesc})`,
+            cable: cableLabel,
+            color: cableTypes[cableKey]?.color || '#6B7280'
+        };
+    }
+};
+
+const openIoModal = () => {
+    if (selectedNode.value) {
+        ensurePortDetailsInitialized(selectedNode.value);
+        showIoModal.value = true;
+    }
+};
+
 const onConnect = (params: any) => {
     const edgeId = `e-${Date.now()}`;
     const newEdge = {
@@ -391,6 +494,9 @@ const onPaneClick = () => {
 const onNodeClick = (event: any) => {
     selectedNodeId.value = event.node.id;
     selectedEdgeId.value = null;
+    if (event.node) {
+        ensurePortDetailsInitialized(event.node);
+    }
 };
 
 const onEdgeClick = (event: any) => {
@@ -990,6 +1096,14 @@ const handleBlueprintImport = (event: Event) => {
                         </div>
 
                         <Button 
+                            type="button" 
+                            @click="openIoModal"
+                            class="w-full bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-lg cursor-pointer text-xs h-8 mt-4"
+                        >
+                            <Table class="mr-1.5 size-3.5" /> {{ isReadOnly ? 'View I/O Table' : 'Configure I/O Table' }}
+                        </Button>
+
+                        <Button 
                             v-if="!isReadOnly"
                             type="button"
                             @click="deleteSelectedNode"
@@ -1092,7 +1206,171 @@ const handleBlueprintImport = (event: Event) => {
                 </div>
             </aside>
         </div>
-    </div>
+        </div>
+
+        <!-- MODAL: Detailed Input-Output Mapping Table -->
+        <div v-if="showIoModal && selectedNode" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div class="bg-card border border-border/60 rounded-2xl w-full max-w-4xl max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <!-- Modal Header -->
+                <div class="px-6 py-4 border-b border-border/40 flex items-center justify-between bg-muted/20">
+                    <div class="flex items-center gap-2">
+                        <Table class="size-5 text-primary" />
+                        <div>
+                            <h3 class="font-bold text-base text-foreground">Device I/O Table</h3>
+                            <p class="text-[10px] text-muted-foreground mt-0.5">
+                                Map port names and descriptions. Connection routes are automatically resolved from the diagram canvas.
+                            </p>
+                        </div>
+                    </div>
+                    <button @click="showIoModal = false" class="text-muted-foreground hover:text-foreground text-xl leading-none cursor-pointer">&times;</button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div class="flex items-center justify-between bg-secondary/20 border border-border/40 p-4 rounded-xl">
+                        <div>
+                            <span class="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">Active Device</span>
+                            <span class="text-sm font-bold text-foreground">{{ selectedNode.data.label }}</span>
+                        </div>
+                        <div class="flex gap-4 text-right">
+                            <div>
+                                <span class="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">Input Ports</span>
+                                <span class="text-xs font-mono font-bold text-foreground">{{ selectedNode.data.inputs || 1 }} Configured</span>
+                            </div>
+                            <div>
+                                <span class="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">Output Ports</span>
+                                <span class="text-xs font-mono font-bold text-foreground">{{ selectedNode.data.outputs || 1 }} Configured</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6 items-start">
+                        <!-- Left Column: Inputs -->
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-1.5 pb-2 border-b border-border/40">
+                                <span class="size-2 rounded-full bg-blue-500"></span>
+                                <h4 class="font-bold text-xs text-foreground uppercase tracking-wider">Device Inputs</h4>
+                            </div>
+
+                            <div class="space-y-3">
+                                <div 
+                                    v-for="idx in (selectedNode.data.inputs || 1)" 
+                                    :key="`in-${idx}`"
+                                    class="p-4 rounded-xl border border-border/60 bg-muted/10 space-y-3"
+                                >
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-mono font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                                            Input #{{ idx }}
+                                        </span>
+                                        
+                                        <!-- Automatic Connection Type status -->
+                                        <div v-if="getPortConnectionInfo(selectedNode.id, 'in', idx)" class="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                                            <span class="size-1.5 rounded-full" :style="{ backgroundColor: getPortConnectionInfo(selectedNode.id, 'in', idx).color }"></span>
+                                            {{ getPortConnectionInfo(selectedNode.id, 'in', idx).description }}
+                                            <span class="opacity-75 font-mono text-[9px]">({{ getPortConnectionInfo(selectedNode.id, 'in', idx).cable }})</span>
+                                        </div>
+                                        <div v-else class="text-[10px] text-muted-foreground italic bg-muted/40 px-2 py-0.5 rounded-full">
+                                            Unconnected
+                                        </div>
+                                    </div>
+
+                                    <div class="grid gap-2">
+                                        <div class="space-y-1">
+                                            <Label :for="`in-${idx}-name`" class="text-[9px] uppercase font-bold text-muted-foreground">Port Name</Label>
+                                            <Input 
+                                                :id="`in-${idx}-name`"
+                                                v-model="selectedNode.data.portDetails.inputs[`in-${idx}`].name"
+                                                :disabled="isReadOnly"
+                                                placeholder="e.g. Stage Left Vocal Mic"
+                                                class="h-8 rounded-lg text-xs"
+                                            />
+                                        </div>
+                                        <div class="space-y-1">
+                                            <Label :for="`in-${idx}-desc`" class="text-[9px] uppercase font-bold text-muted-foreground">Description / Notes</Label>
+                                            <textarea 
+                                                :id="`in-${idx}-desc`"
+                                                v-model="selectedNode.data.portDetails.inputs[`in-${idx}`].description"
+                                                :disabled="isReadOnly"
+                                                placeholder="e.g. Wireless Handheld SM58 transmitter Channel 1..."
+                                                rows="2"
+                                                class="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
+                                            ></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Outputs -->
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-1.5 pb-2 border-b border-border/40">
+                                <span class="size-2 rounded-full bg-orange-500"></span>
+                                <h4 class="font-bold text-xs text-foreground uppercase tracking-wider">Device Outputs</h4>
+                            </div>
+
+                            <div class="space-y-3">
+                                <div 
+                                    v-for="idx in (selectedNode.data.outputs || 1)" 
+                                    :key="`out-${idx}`"
+                                    class="p-4 rounded-xl border border-border/60 bg-muted/10 space-y-3"
+                                >
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-mono font-bold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full">
+                                            Output #{{ idx }}
+                                        </span>
+                                        
+                                        <!-- Automatic Connection Type status -->
+                                        <div v-if="getPortConnectionInfo(selectedNode.id, 'out', idx)" class="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                                            <span class="size-1.5 rounded-full" :style="{ backgroundColor: getPortConnectionInfo(selectedNode.id, 'out', idx).color }"></span>
+                                            {{ getPortConnectionInfo(selectedNode.id, 'out', idx).description }}
+                                            <span class="opacity-75 font-mono text-[9px]">({{ getPortConnectionInfo(selectedNode.id, 'out', idx).cable }})</span>
+                                        </div>
+                                        <div v-else class="text-[10px] text-muted-foreground italic bg-muted/40 px-2 py-0.5 rounded-full">
+                                            Unconnected
+                                        </div>
+                                    </div>
+
+                                    <div class="grid gap-2">
+                                        <div class="space-y-1">
+                                            <Label :for="`out-${idx}-name`" class="text-[9px] uppercase font-bold text-muted-foreground">Port Name</Label>
+                                            <Input 
+                                                :id="`out-${idx}-name`"
+                                                v-model="selectedNode.data.portDetails.outputs[`out-${idx}`].name"
+                                                :disabled="isReadOnly"
+                                                placeholder="e.g. Left PA Main Amp XLR"
+                                                class="h-8 rounded-lg text-xs"
+                                            />
+                                        </div>
+                                        <div class="space-y-1">
+                                            <Label :for="`out-${idx}-desc`" class="text-[9px] uppercase font-bold text-muted-foreground">Description / Notes</Label>
+                                            <textarea 
+                                                :id="`out-${idx}-desc`"
+                                                v-model="selectedNode.data.portDetails.outputs[`out-${idx}`].description"
+                                                :disabled="isReadOnly"
+                                                placeholder="e.g. Line out routed to left amp rack FOH array..."
+                                                rows="2"
+                                                class="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
+                                            ></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="px-6 py-4 border-t border-border/40 flex justify-end bg-muted/20">
+                    <Button 
+                        type="button" 
+                        @click="showIoModal = false" 
+                        class="bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-xl text-xs h-9 px-6 cursor-pointer"
+                    >
+                        Done
+                    </Button>
+                </div>
+            </div>
+        </div>
 </template>
 
 <style>
