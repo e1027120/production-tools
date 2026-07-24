@@ -346,7 +346,7 @@ const ensurePortDetailsInitialized = (node: any) => {
         node.data.portDetails.outputs = {};
     }
     
-    const numInputs = node.data.inputs || 1;
+    const numInputs = node.data.inputs !== undefined ? node.data.inputs : 1;
     for (let i = 1; i <= numInputs; i++) {
         const key = `in-${i}`;
         if (!node.data.portDetails.inputs[key]) {
@@ -354,7 +354,7 @@ const ensurePortDetailsInitialized = (node: any) => {
         }
     }
     
-    const numOutputs = node.data.outputs || 1;
+    const numOutputs = node.data.outputs !== undefined ? node.data.outputs : 1;
     for (let i = 1; i <= numOutputs; i++) {
         const key = `out-${i}`;
         if (!node.data.portDetails.outputs[key]) {
@@ -536,12 +536,12 @@ const handleEdgeDoubleClick = (event: MouseEvent, edgeId: string) => {
 
 const getSourceNodeOutputsCount = (sourceId: string) => {
     const node = nodes.value.find(n => n.id === sourceId);
-    return node ? (node.data.outputs || 1) : 1;
+    return node ? (node.data.outputs !== undefined ? node.data.outputs : 1) : 1;
 };
 
 const getTargetNodeInputsCount = (targetId: string) => {
     const node = nodes.value.find(n => n.id === targetId);
-    return node ? (node.data.inputs || 1) : 1;
+    return node ? (node.data.inputs !== undefined ? node.data.inputs : 1) : 1;
 };
 
 const getPortName = (nodeId: string, type: 'in' | 'out', portIndex: number) => {
@@ -927,19 +927,19 @@ const handleBlueprintImport = (event: Event) => {
                         >
                             <!-- Inputs (Target Handles) -->
                             <Handle 
-                                v-for="idx in (data.inputs || 1)" 
+                                v-for="idx in (data.inputs !== undefined ? data.inputs : 1)" 
                                 :key="`in-${idx}`"
                                 :id="`in-${idx}`"
                                 type="target" 
                                 :position="data.flipped ? Position.Right : Position.Left" 
-                                :style="{ top: `${(idx * 100) / ((data.inputs || 1) + 1)}%` }"
+                                :style="{ top: `${(idx * 100) / ((data.inputs !== undefined ? data.inputs : 1) + 1)}%` }"
                                 class="size-2 bg-primary border-card" 
                             />
                             <!-- Input Port Names -->
                             <span 
-                                v-for="idx in (data.inputs || 1)"
+                                v-for="idx in (data.inputs !== undefined ? data.inputs : 1)"
                                 :key="`in-label-${idx}`"
-                                :style="{ top: `${(idx * 100) / ((data.inputs || 1) + 1)}%` }"
+                                :style="{ top: `${(idx * 100) / ((data.inputs !== undefined ? data.inputs : 1) + 1)}%` }"
                                 :class="[
                                     'absolute transform -translate-y-1/2 text-[8px] font-mono text-muted-foreground/80 pointer-events-none whitespace-nowrap overflow-hidden max-w-[70px]',
                                     data.flipped ? 'right-3.5 text-right' : 'left-3.5 text-left'
@@ -951,19 +951,19 @@ const handleBlueprintImport = (event: Event) => {
 
                             <!-- Outputs (Source Handles) -->
                             <Handle 
-                                v-for="idx in (data.outputs || 1)" 
+                                v-for="idx in (data.outputs !== undefined ? data.outputs : 1)" 
                                 :key="`out-${idx}`"
                                 :id="`out-${idx}`"
                                 type="source" 
                                 :position="data.flipped ? Position.Left : Position.Right" 
-                                :style="{ top: `${(idx * 100) / ((data.outputs || 1) + 1)}%` }"
+                                :style="{ top: `${(idx * 100) / ((data.outputs !== undefined ? data.outputs : 1) + 1)}%` }"
                                 class="size-2 bg-primary border-card" 
                             />
                             <!-- Output Port Names -->
                             <span 
-                                v-for="idx in (data.outputs || 1)"
+                                v-for="idx in (data.outputs !== undefined ? data.outputs : 1)"
                                 :key="`out-label-${idx}`"
-                                :style="{ top: `${(idx * 100) / ((data.outputs || 1) + 1)}%` }"
+                                :style="{ top: `${(idx * 100) / ((data.outputs !== undefined ? data.outputs : 1) + 1)}%` }"
                                 :class="[
                                     'absolute transform -translate-y-1/2 text-[8px] font-mono text-muted-foreground/80 pointer-events-none whitespace-nowrap overflow-hidden max-w-[70px]',
                                     data.flipped ? 'left-3.5 text-left' : 'right-3.5 text-right'
@@ -1301,23 +1301,23 @@ const handleBlueprintImport = (event: Event) => {
 
                         <div class="grid grid-cols-2 gap-2">
                             <div class="space-y-1">
-                                <Label class="text-[10px] uppercase font-bold text-muted-foreground">Inputs (1-16)</Label>
+                                <Label class="text-[10px] uppercase font-bold text-muted-foreground">Inputs (0-16)</Label>
                                 <Input 
                                     :disabled="isReadOnly"
                                     type="number"
                                     v-model.number="selectedNode.data.inputs"
-                                    min="1"
+                                    min="0"
                                     max="16"
                                     class="rounded-lg text-xs h-8 bg-background font-mono"
                                 />
                             </div>
                             <div class="space-y-1">
-                                <Label class="text-[10px] uppercase font-bold text-muted-foreground">Outputs (1-16)</Label>
+                                <Label class="text-[10px] uppercase font-bold text-muted-foreground">Outputs (0-16)</Label>
                                 <Input 
                                     :disabled="isReadOnly"
                                     type="number"
                                     v-model.number="selectedNode.data.outputs"
-                                    min="1"
+                                    min="0"
                                     max="16"
                                     class="rounded-lg text-xs h-8 bg-background font-mono"
                                 />
