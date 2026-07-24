@@ -231,6 +231,7 @@ const cableTypes: Record<string, CableType> = {
     audio_cat6: { name: 'audio_cat6', color: '#F59E0B', label: 'Audio Cat6 (Yellow)' },
     sdi: { name: 'sdi', color: '#EF4444', label: 'SDI Video (Red)' },
     hdmi: { name: 'hdmi', color: '#3B82F6', label: 'HDMI Video (Blue)' },
+    usb: { name: 'usb', color: '#06B6D4', label: 'USB (Cyan)' },
     video_cat6: { name: 'video_cat6', color: '#F97316', label: 'Video Cat6 (Orange)' },
     net_cat6: { name: 'net_cat6', color: '#10B981', label: 'Network Cat6 (Green)' },
     generic: { name: 'generic', color: '#6B7280', label: 'Generic (Gray)' },
@@ -656,6 +657,14 @@ const handleBlueprintImport = (event: Event) => {
                                 strokeWidth: selected ? 4 : (style?.strokeWidth || 3)
                             }"
                             :marker-end="markerEnd"
+                        />
+                        <path
+                            :d="getCustomPath(sourceX, sourceY, targetX, targetY, data?.waypoints)"
+                            fill="none"
+                            stroke="transparent"
+                            stroke-width="16"
+                            class="vue-flow__edge-interaction"
+                            style="pointer-events: stroke !important; cursor: pointer;"
                         />
                         <g v-if="selected && data?.waypoints">
                             <g
@@ -1099,7 +1108,11 @@ const handleBlueprintImport = (event: Event) => {
 .vue-flow__edge-path {
     stroke-dasharray: 4;
     animation: dash 15s linear infinite;
+    pointer-events: none !important;
+}
+.vue-flow__edge-interaction {
     pointer-events: stroke !important;
+    cursor: pointer;
 }
 @keyframes dash {
     from {
