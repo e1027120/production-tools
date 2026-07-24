@@ -20,7 +20,8 @@ import {
     Check,
     Download,
     Upload,
-    Table
+    Table,
+    SlidersHorizontal
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -182,14 +183,21 @@ const deleteWaypoint = (idx: number) => {
 };
 
 const getCustomPath = (sourceX: number, sourceY: number, targetX: number, targetY: number, waypoints?: { x: number; y: number }[]) => {
-    let path = `M ${sourceX} ${sourceY}`;
     if (waypoints && waypoints.length > 0) {
+        let path = `M ${sourceX} ${sourceY}`;
         for (const pt of waypoints) {
             path += ` L ${pt.x} ${pt.y}`;
         }
+        path += ` L ${targetX} ${targetY}`;
+        return path;
     }
-    path += ` L ${targetX} ${targetY}`;
-    return path;
+    
+    if (layoutMode.value === 'semi-auto') {
+        const midX = sourceX + (targetX - sourceX) / 2;
+        return `M ${sourceX} ${sourceY} L ${midX} ${sourceY} L ${midX} ${targetY} L ${targetX} ${targetY}`;
+    }
+    
+    return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
 };
 
 // Diagram save configuration
@@ -414,6 +422,87 @@ const openIoModal = () => {
     if (selectedNode.value) {
         ensurePortDetailsInitialized(selectedNode.value);
         showIoModal.value = true;
+    }
+};
+
+// Layout Mode and Automatic Organization Logic
+const layoutMode = ref('semi-auto');
+
+const autoArrangeLayout = () => {
+    if (isReadOnly.value) return;
+    if (!confirm("Auto-arrange will reposition all devices and straighten connection lines. Proceed?")) {
+        return;
+    }
+    
+    const nodeColumns = new Map();
+    nodes.value.forEach(node => {
+        nodeColumns.set(node.id, 0);
+    });
+    
+    const maxPasses = 5;
+    for (let pass = 0; pass < maxPasses; pass++) {
+        edges.value.forEach(edge => {
+            const srcCol = nodeColumns.get(edge.source) || 0;
+            const targetCol = nodeColumns.get(edge.target) || 0;
+            if (targetCol <= srcCol) {
+                nodeColumns.set(edge.target, srcCol + 1);
+            }
+        });
+    }
+    
+    const columnsMap = new Map();
+    nodes.value.forEach(node => {
+        const col = nodeColumns.get(node.id) || 0;
+        if (!columnsMap.has(col)) {
+            columnsMap.set(col, []);
+        }
+        columnsMap.get(col).push(node);
+    });
+    
+    const startX = 80;
+    const startY = 150;
+    const horizontalGap = 350;
+    const verticalGap = 160;
+    
+    const sortedCols = Array.from(columnsMap.keys()).sort((a, b) => a - b);
+    
+    sortedCols.forEach((colIndex, idx) => {
+        const colNodes = columnsMap.get(colIndex) || [];
+        const xPos = startX + idx * horizontalGap;
+        
+        const totalHeight = (colNodes.length - 1) * verticalGap;
+        const colStartY = startY - totalHeight / 2;
+        
+        colNodes.forEach((node, rowIndex) => {
+            node.position = {
+                x: xPos,
+                y: colStartY + rowIndex * verticalGap
+            };
+        });
+    });
+    
+    edges.value.forEach(edge => {
+        if (!edge.data) {
+            edge.data = {};
+        }
+        edge.data.waypoints = [];
+    });
+};
+
+const onNodeDragStop = (event: any) => {
+    if (isReadOnly.value) return;
+    const node = event.node;
+    if (layoutMode.value === 'semi-auto') {
+        node.position.x = Math.round(node.position.x / 16) * 16;
+        node.position.y = Math.round(node.position.y / 16) * 16;
+        
+        edges.value.forEach(edge => {
+            if (edge.source === node.id || edge.target === node.id) {
+                if (edge.data) {
+                    edge.data.waypoints = [];
+                }
+            }
+        });
     }
 };
 
@@ -710,6 +799,42 @@ const handleBlueprintImport = (event: Event) => {
                     class="hidden" 
                     @change="handleBlueprintImport"
                 />
+                <!-- Auto-Arrange Layout Button -->
+                <Button 
+                    v-if="!isReadOnly"
+                    type="button"
+                    @click="autoArrangeLayout"
+                    variant="outline"
+                    class="rounded-xl text-xs h-8.5 border-border/60 hover:bg-muted/40 cursor-pointer mr-2"
+                    title="Automatically arrange devices and clean connection lines"
+                >
+                    <SlidersHorizontal class="size-3.5 mr-1" /> Auto-Arrange
+                </Button>
+
+                <!-- Layout Mode Segmented Control -->
+                <div class="flex items-center bg-muted/60 p-0.5 rounded-xl border border-border/40 text-[10px] mr-2 h-8.5 select-none">
+                    <button 
+                        type="button"
+                        @click="layoutMode = 'manual'"
+                        :class="[
+                            'px-3 py-1 rounded-lg font-bold transition-all cursor-pointer text-[10px]',
+                            layoutMode === 'manual' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        ]"
+                    >
+                        Manual
+                    </button>
+                    <button 
+                        type="button"
+                        @click="layoutMode = 'semi-auto'"
+                        :class="[
+                            'px-3 py-1 rounded-lg font-bold transition-all cursor-pointer text-[10px]',
+                            layoutMode === 'semi-auto' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        ]"
+                    >
+                        Semi-Auto
+                    </button>
+                </div>
+
                 <Button 
                     v-if="!isReadOnly"
                     @click="triggerBlueprintImport" 
@@ -757,6 +882,7 @@ const handleBlueprintImport = (event: Event) => {
                     @pane-click="onPaneClick"
                     @node-click="onNodeClick"
                     @edge-click="onEdgeClick"
+                    @node-drag-stop="onNodeDragStop"
                     fit-view-on-init
                     class="w-full h-full"
                 >
