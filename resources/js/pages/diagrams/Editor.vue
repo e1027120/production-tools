@@ -21,7 +21,8 @@ import {
     Download,
     Upload,
     Table,
-    SlidersHorizontal
+    SlidersHorizontal,
+    RefreshCw
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -423,6 +424,14 @@ const openIoModal = () => {
         ensurePortDetailsInitialized(selectedNode.value);
         showIoModal.value = true;
     }
+};
+
+const toggleNodeFlipped = () => {
+    if (isReadOnly.value || !selectedNode.value) return;
+    if (selectedNode.value.data.flipped === undefined) {
+        selectedNode.value.data.flipped = false;
+    }
+    selectedNode.value.data.flipped = !selectedNode.value.data.flipped;
 };
 
 // Layout Mode and Automatic Organization Logic
@@ -922,7 +931,7 @@ const handleBlueprintImport = (event: Event) => {
                                 :key="`in-${idx}`"
                                 :id="`in-${idx}`"
                                 type="target" 
-                                :position="Position.Left" 
+                                :position="data.flipped ? Position.Right : Position.Left" 
                                 :style="{ top: `${(idx * 100) / ((data.inputs || 1) + 1)}%` }"
                                 class="size-2 bg-primary border-card" 
                             />
@@ -931,7 +940,10 @@ const handleBlueprintImport = (event: Event) => {
                                 v-for="idx in (data.inputs || 1)"
                                 :key="`in-label-${idx}`"
                                 :style="{ top: `${(idx * 100) / ((data.inputs || 1) + 1)}%` }"
-                                class="absolute left-3.5 transform -translate-y-1/2 text-[8px] font-mono text-muted-foreground/80 pointer-events-none whitespace-nowrap overflow-hidden max-w-[70px] text-left"
+                                :class="[
+                                    'absolute transform -translate-y-1/2 text-[8px] font-mono text-muted-foreground/80 pointer-events-none whitespace-nowrap overflow-hidden max-w-[70px]',
+                                    data.flipped ? 'right-3.5 text-right' : 'left-3.5 text-left'
+                                ]"
                                 :title="data.portDetails?.inputs?.[`in-${idx}`]?.name || ''"
                             >
                                 {{ data.portDetails?.inputs?.[`in-${idx}`]?.name || '' }}
@@ -943,7 +955,7 @@ const handleBlueprintImport = (event: Event) => {
                                 :key="`out-${idx}`"
                                 :id="`out-${idx}`"
                                 type="source" 
-                                :position="Position.Right" 
+                                :position="data.flipped ? Position.Left : Position.Right" 
                                 :style="{ top: `${(idx * 100) / ((data.outputs || 1) + 1)}%` }"
                                 class="size-2 bg-primary border-card" 
                             />
@@ -952,7 +964,10 @@ const handleBlueprintImport = (event: Event) => {
                                 v-for="idx in (data.outputs || 1)"
                                 :key="`out-label-${idx}`"
                                 :style="{ top: `${(idx * 100) / ((data.outputs || 1) + 1)}%` }"
-                                class="absolute right-3.5 transform -translate-y-1/2 text-[8px] font-mono text-muted-foreground/80 pointer-events-none whitespace-nowrap overflow-hidden max-w-[70px] text-right"
+                                :class="[
+                                    'absolute transform -translate-y-1/2 text-[8px] font-mono text-muted-foreground/80 pointer-events-none whitespace-nowrap overflow-hidden max-w-[70px]',
+                                    data.flipped ? 'left-3.5 text-left' : 'right-3.5 text-right'
+                                ]"
                                 :title="data.portDetails?.outputs?.[`out-${idx}`]?.name || ''"
                             >
                                 {{ data.portDetails?.outputs?.[`out-${idx}`]?.name || '' }}
@@ -1315,6 +1330,15 @@ const handleBlueprintImport = (event: Event) => {
                             class="w-full bg-[#1AC18C] hover:bg-[#1AC18C]/95 text-white font-bold rounded-lg cursor-pointer text-xs h-8 mt-4"
                         >
                             <Table class="mr-1.5 size-3.5" /> {{ isReadOnly ? 'View I/O Table' : 'Configure I/O Table' }}
+                        </Button>
+
+                        <Button 
+                            v-if="!isReadOnly"
+                            type="button" 
+                            @click="toggleNodeFlipped"
+                            class="w-full bg-[#22273C] hover:bg-[#22273C]/90 text-white font-bold rounded-lg cursor-pointer text-xs h-8 mt-2"
+                        >
+                            <RefreshCw class="mr-1.5 size-3.5" /> Flip Horizontally
                         </Button>
 
                         <Button 
