@@ -417,6 +417,50 @@ const openIoModal = () => {
     }
 };
 
+const getSourceNodeOutputsCount = (sourceId: string) => {
+    const node = nodes.value.find(n => n.id === sourceId);
+    return node ? (node.data.outputs || 1) : 1;
+};
+
+const getTargetNodeInputsCount = (targetId: string) => {
+    const node = nodes.value.find(n => n.id === targetId);
+    return node ? (node.data.inputs || 1) : 1;
+};
+
+const getPortName = (nodeId: string, type: 'in' | 'out', portIndex: number) => {
+    const node = nodes.value.find(n => n.id === nodeId);
+    if (!node || !node.data.portDetails) return '';
+    const key = `${type}-${portIndex}`;
+    const details = type === 'in' 
+        ? node.data.portDetails.inputs?.[key] 
+        : node.data.portDetails.outputs?.[key];
+    return details && details.name ? `(${details.name})` : '';
+};
+
+const updateEdgeSource = (event: Event) => {
+    if (isReadOnly.value || !selectedEdge.value) return;
+    const newSource = (event.target as HTMLSelectElement).value;
+    selectedEdge.value.source = newSource;
+    selectedEdge.value.sourceHandle = 'out-1';
+};
+
+const updateEdgeSourceHandle = (event: Event) => {
+    if (isReadOnly.value || !selectedEdge.value) return;
+    selectedEdge.value.sourceHandle = (event.target as HTMLSelectElement).value;
+};
+
+const updateEdgeTarget = (event: Event) => {
+    if (isReadOnly.value || !selectedEdge.value) return;
+    const newTarget = (event.target as HTMLSelectElement).value;
+    selectedEdge.value.target = newTarget;
+    selectedEdge.value.targetHandle = 'in-1';
+};
+
+const updateEdgeTargetHandle = (event: Event) => {
+    if (isReadOnly.value || !selectedEdge.value) return;
+    selectedEdge.value.targetHandle = (event.target as HTMLSelectElement).value;
+};
+
 const onConnect = (params: any) => {
     const edgeId = `e-${Date.now()}`;
     const newEdge = {
@@ -721,8 +765,11 @@ const handleBlueprintImport = (event: Event) => {
                         <div 
                             :class="[
                                 getNodeClasses(data, selected),
-                                'border border-border/80 p-3.5 shadow-xl flex flex-col justify-center items-center font-sans relative min-w-[125px] transition-all duration-200 cursor-grab active:cursor-grabbing text-center'
+                                'border border-border/80 p-3.5 shadow-xl flex flex-col justify-center items-center font-sans relative min-w-[200px] transition-all duration-200 cursor-grab active:cursor-grabbing text-center'
                             ]"
+                            :style="{
+                                height: `${Math.max(80, (Math.max(data.inputs || 1, data.outputs || 1) + 1) * 24)}px`
+                            }"
                         >
                             <!-- Inputs (Target Handles) -->
                             <Handle 
@@ -734,6 +781,17 @@ const handleBlueprintImport = (event: Event) => {
                                 :style="{ top: `${(idx * 100) / ((data.inputs || 1) + 1)}%` }"
                                 class="size-2 bg-primary border-card" 
                             />
+                            <!-- Input Port Names -->
+                            <span 
+                                v-for="idx in (data.inputs || 1)"
+                                :key="`in-label-${idx}`"
+                                :style="{ top: `${(idx * 100) / ((data.inputs || 1) + 1)}%` }"
+                                class="absolute left-3.5 transform -translate-y-1/2 text-[8px] font-mono text-muted-foreground/80 pointer-events-none whitespace-nowrap overflow-hidden max-w-[70px] text-left"
+                                :title="data.portDetails?.inputs?.[`in-${idx}`]?.name || ''"
+                            >
+                                {{ data.portDetails?.inputs?.[`in-${idx}`]?.name || '' }}
+                            </span>
+
                             <!-- Outputs (Source Handles) -->
                             <Handle 
                                 v-for="idx in (data.outputs || 1)" 
@@ -744,6 +802,16 @@ const handleBlueprintImport = (event: Event) => {
                                 :style="{ top: `${(idx * 100) / ((data.outputs || 1) + 1)}%` }"
                                 class="size-2 bg-primary border-card" 
                             />
+                            <!-- Output Port Names -->
+                            <span 
+                                v-for="idx in (data.outputs || 1)"
+                                :key="`out-label-${idx}`"
+                                :style="{ top: `${(idx * 100) / ((data.outputs || 1) + 1)}%` }"
+                                class="absolute right-3.5 transform -translate-y-1/2 text-[8px] font-mono text-muted-foreground/80 pointer-events-none whitespace-nowrap overflow-hidden max-w-[70px] text-right"
+                                :title="data.portDetails?.outputs?.[`out-${idx}`]?.name || ''"
+                            >
+                                {{ data.portDetails?.outputs?.[`out-${idx}`]?.name || '' }}
+                            </span>
                             
                             <span class="text-[8px] uppercase tracking-wider font-bold opacity-60 block leading-none mb-1">{{ data.typeLabel }}</span>
                             <span class="font-bold text-xs leading-tight block break-words max-w-[140px]">{{ data.label }}</span>
@@ -1130,6 +1198,71 @@ const handleBlueprintImport = (event: Event) => {
                                     {{ type.label }}
                                 </option>
                             </select>
+                        </div>
+
+                        <!-- Connection Ends Configurator -->
+                        <div class="space-y-3 border-t border-border/60 pt-3 mt-3">
+                            <Label class="text-[10px] uppercase font-bold text-muted-foreground block">Source Endpoint</Label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="space-y-1">
+                                    <Label class="text-[9px] text-muted-foreground">Device</Label>
+                                    <select 
+                                        :disabled="isReadOnly"
+                                        :value="selectedEdge.source" 
+                                        @change="updateEdgeSource"
+                                        class="flex h-7 w-full rounded-md border border-input bg-background px-2 py-0.5 text-[10px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
+                                    >
+                                        <option v-for="node in nodes" :key="node.id" :value="node.id">
+                                            {{ node.data.label }}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1">
+                                    <Label class="text-[9px] text-muted-foreground">Port</Label>
+                                    <select 
+                                        :disabled="isReadOnly"
+                                        :value="selectedEdge.sourceHandle" 
+                                        @change="updateEdgeSourceHandle"
+                                        class="flex h-7 w-full rounded-md border border-input bg-background px-2 py-0.5 text-[10px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
+                                    >
+                                        <option v-for="idx in getSourceNodeOutputsCount(selectedEdge.source)" :key="idx" :value="`out-${idx}`">
+                                            Out #{{ idx }} {{ getPortName(selectedEdge.source, 'out', idx) }}
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3 border-t border-border/60 pt-3 mt-3">
+                            <Label class="text-[10px] uppercase font-bold text-muted-foreground block">Target Endpoint</Label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="space-y-1">
+                                    <Label class="text-[9px] text-muted-foreground">Device</Label>
+                                    <select 
+                                        :disabled="isReadOnly"
+                                        :value="selectedEdge.target" 
+                                        @change="updateEdgeTarget"
+                                        class="flex h-7 w-full rounded-md border border-input bg-background px-2 py-0.5 text-[10px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
+                                    >
+                                        <option v-for="node in nodes" :key="node.id" :value="node.id">
+                                            {{ node.data.label }}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1">
+                                    <Label class="text-[9px] text-muted-foreground">Port</Label>
+                                    <select 
+                                        :disabled="isReadOnly"
+                                        :value="selectedEdge.targetHandle" 
+                                        @change="updateEdgeTargetHandle"
+                                        class="flex h-7 w-full rounded-md border border-input bg-background px-2 py-0.5 text-[10px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1AC18C]/80"
+                                    >
+                                        <option v-for="idx in getTargetNodeInputsCount(selectedEdge.target)" :key="idx" :value="`in-${idx}`">
+                                            In #{{ idx }} {{ getPortName(selectedEdge.target, 'in', idx) }}
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Waypoint Manager -->
