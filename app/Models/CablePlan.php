@@ -100,8 +100,9 @@ class CablePlan extends Model
             $horizontalLength += $segmentLength;
         }
 
-        // Add 2 * room_height to the horizontal length
-        $totalSingleLength = $horizontalLength + (2 * ($this->room_height ?? 3.5));
+        // Add 2 * room_height and extra margin (rise and fall) in meters to the horizontal length
+        $margin = (float) ($cable['margin'] ?? 0.0);
+        $totalSingleLength = $horizontalLength + (2 * ($this->room_height ?? 3.5)) + $margin;
 
         // Apply slack percent
         $slackMultiplier = 1.0 + ($this->slack_percent / 100.0);

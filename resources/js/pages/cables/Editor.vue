@@ -45,6 +45,7 @@ interface CableRun {
     points: Point[];
     notes?: string;
     qty?: number;
+    margin?: number;
 }
 
 interface CablePlan {
@@ -75,7 +76,12 @@ const isReadOnly = computed(() => userRole.value === 'User');
 const editorMode = ref<'select' | 'draw' | 'calibrate'>('select');
 
 // Workspace states
-const cablesList = ref<CableRun[]>([...props.plan.cables]);
+const cablesList = ref<CableRun[]>(
+    (props.plan.cables || []).map((c: any) => ({
+        ...c,
+        margin: c.margin !== undefined ? Number(c.margin) : 0,
+    }))
+);
 const activeCableId = ref<string | null>(cablesList.value[0]?.id || null);
 const planScalePixels = ref(props.plan.scale_pixels || 100);
 const planScaleDistance = ref(props.plan.scale_distance || 5);
@@ -117,6 +123,7 @@ const newCableForm = ref({
     type: props.cableTypes[0]?.name || '',
     color: props.cableTypes[0]?.color || '#3B82F6',
     notes: '',
+    margin: 0,
 });
 
 const onNewCableTypeChange = () => {
@@ -145,6 +152,7 @@ const addCableRun = () => {
         points: [],
         notes: newCableForm.value.notes,
         qty: 1,
+        margin: Number(newCableForm.value.margin) || 0,
     };
     cablesList.value.push(newCable);
     activeCableId.value = id;
@@ -154,6 +162,7 @@ const addCableRun = () => {
         type: props.cableTypes[0]?.name || '',
         color: props.cableTypes[0]?.color || '#3B82F6',
         notes: '',
+        margin: 0,
     };
     editorMode.value = 'draw';
 };
@@ -212,6 +221,7 @@ const duplicateCableRun = (cable: CableRun) => {
         points: JSON.parse(JSON.stringify(cable.points)),
         notes: cable.notes ? `${cable.notes}` : '',
         qty: 1,
+        margin: cable.margin ? Number(cable.margin) : 0,
     };
     cablesList.value.push(clonedCable);
     activeCableId.value = id;
@@ -332,8 +342,9 @@ const calculateRunLength = (cable: CableRun) => {
         len += Math.sqrt(dx * dx + dy * dy);
     }
     
-    // Add 2 * room height to single run
-    const singleLength = len + (2 * (planRoomHeight.value || 3.5));
+    // Add 2 * room height and extra margin to single run
+    const margin = Number(cable.margin) || 0;
+    const singleLength = len + (2 * (planRoomHeight.value || 3.5)) + margin;
     
     // Apply slack percent
     const singleLengthWithSlack = singleLength * (1 + planSlackPercent.value / 100);
@@ -355,8 +366,9 @@ const calculateRunRawLength = (cable: CableRun) => {
         const dy = (p2.y - p1.y) * ratio;
         len += Math.sqrt(dx * dx + dy * dy);
     }
-    // Return single raw horizontal length + vertical drop without slack or Qty multiplier
-    return len + (2 * (planRoomHeight.value || 3.5));
+    // Return single raw horizontal length + vertical drop + extra margin without slack or Qty multiplier
+    const margin = Number(cable.margin) || 0;
+    return len + (2 * (planRoomHeight.value || 3.5)) + margin;
 };
 
 const getCableTypePrice = (typeName: string) => {
@@ -491,7 +503,7 @@ const savePlan = () => {
 // CSV Bill of Materials Export
 const exportBOM = () => {
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Cable ID,Cable Name,Cable Type,Color,Quantity,Raw Single Length,Slack Percentage,Total Length (with Slack),Unit,Price per unit,Total Cost,Notes\r\n";
+    csvContent += "Cable ID,Cable Name,Cable Type,Color,Quantity,Raw Single Length,Extra Margin (m),Slack Percentage,Total Length (with Slack),Unit,Price per unit,Total Cost,Notes\r\n";
     
     cablesList.value.forEach(c => {
         const raw = calculateRunRawLength(c).toFixed(2);
@@ -499,7 +511,8 @@ const exportBOM = () => {
         const qty = c.qty || 1;
         const price = getCableTypePrice(c.type);
         const cost = (parseFloat(tot) * price).toFixed(2);
-        csvContent += `"${c.id}","${c.name}","${c.type}","${c.color}",${qty},${raw},${planSlackPercent.value}%,${tot},"${planScaleUnit.value}","$${price.toFixed(2)}","$${cost}","${c.notes || ''}"\r\n`;
+        const margin = c.margin || 0;
+        csvContent += `"${c.id}","${c.name}","${c.type}","${c.color}",${qty},${raw},${margin},${planSlackPercent.value}%,${tot},"${planScaleUnit.value}","$${price.toFixed(2)}","$${cost}","${c.notes || ''}"\r\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
@@ -738,6 +751,11 @@ defineOptions({
                                         <span class="text-[9px] text-muted-foreground font-mono truncate uppercase">{{ activeCable.color }}</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <Label class="text-[10px] uppercase font-bold text-muted-foreground">Extra Margin / Rise & Fall (m)</Label>
+                                <Input :disabled="isReadOnly" type="number" step="0.1" min="0" v-model.number="activeCable.margin" class="rounded-xl h-8 px-2 text-xs bg-card" placeholder="e.g. 2.0" />
                             </div>
 
                             <div class="space-y-1">
@@ -1040,6 +1058,19 @@ defineOptions({
                                 class="rounded-xl h-10 p-1 cursor-pointer"
                             />
                         </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <Label for="cable-margin">Extra Margin / Rise & Fall (m)</Label>
+                        <Input 
+                            id="cable-margin"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            v-model.number="newCableForm.margin"
+                            placeholder="e.g. 2.0 (m)"
+                            class="rounded-xl"
+                        />
                     </div>
 
                     <div class="space-y-1.5">

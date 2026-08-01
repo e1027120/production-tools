@@ -270,3 +270,27 @@ test('users with User role cannot modify cable plans', function () {
     $response = $this->delete(route('cable-plans.destroy', $plan));
     $response->assertStatus(403);
 });
+
+test('cable length calculation incorporates extra margin', function () {
+    $plan = new CablePlan([
+        'scale_pixels' => 100.0,
+        'scale_distance' => 10.0, // 1px = 0.1m
+        'slack_percent' => 10.0, // 10%
+        'room_height' => 3.0,
+    ]);
+
+    // Points distance: 100px = 10m
+    // Room height: 3.0 * 2 = 6m
+    // Margin: 4.0m
+    // Total single: 10m + 6m + 4m = 20m
+    // With Slack: 20m * 1.1 = 22m
+    // Qty: 2
+    // Expected total: 22m * 2 = 44m
+    $cable = [
+        'points' => [['x' => 0, 'y' => 0], ['x' => 100, 'y' => 0]],
+        'qty' => 2,
+        'margin' => 4.0,
+    ];
+
+    expect($plan->calculateCableLength($cable))->toEqual(44.0);
+});
