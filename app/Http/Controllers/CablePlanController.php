@@ -14,6 +14,15 @@ use Inertia\Response;
 class CablePlanController extends Controller
 {
     /**
+     * Get the storage disk to use for floor plans.
+     */
+    protected function getStorageDisk(): string
+    {
+        $defaultDisk = config('filesystems.default');
+        return $defaultDisk === 'local' ? 'public' : $defaultDisk;
+    }
+
+    /**
      * Display a listing of the resource.
      */
     public function index(Request $request): Response
@@ -33,7 +42,7 @@ class CablePlanController extends Controller
                     'name' => $plan->name,
                     'description' => $plan->description,
                     'floor_plan_path' => $plan->floor_plan_path,
-                    'floor_plan_url' => $plan->floor_plan_path ? Storage::disk('public')->url($plan->floor_plan_path) : null,
+                    'floor_plan_url' => $plan->floor_plan_path ? Storage::disk($this->getStorageDisk())->url($plan->floor_plan_path) : null,
                     'scale_pixels' => $plan->scale_pixels,
                     'scale_distance' => $plan->scale_distance,
                     'scale_unit' => $plan->scale_unit,
@@ -103,7 +112,7 @@ class CablePlanController extends Controller
                 'name' => $cablePlan->name,
                 'description' => $cablePlan->description,
                 'floor_plan_path' => $cablePlan->floor_plan_path,
-                'floor_plan_url' => $cablePlan->floor_plan_path ? Storage::disk('public')->url($cablePlan->floor_plan_path) : null,
+                'floor_plan_url' => $cablePlan->floor_plan_path ? Storage::disk($this->getStorageDisk())->url($cablePlan->floor_plan_path) : null,
                 'scale_pixels' => $cablePlan->scale_pixels,
                 'scale_distance' => $cablePlan->scale_distance,
                 'scale_unit' => $cablePlan->scale_unit,
@@ -172,7 +181,7 @@ class CablePlanController extends Controller
         }
 
         if ($cablePlan->floor_plan_path) {
-            Storage::disk('public')->delete($cablePlan->floor_plan_path);
+            Storage::disk($this->getStorageDisk())->delete($cablePlan->floor_plan_path);
         }
 
         $cablePlan->delete();
@@ -199,10 +208,10 @@ class CablePlanController extends Controller
         ]);
 
         if ($cablePlan->floor_plan_path) {
-            Storage::disk('public')->delete($cablePlan->floor_plan_path);
+            Storage::disk($this->getStorageDisk())->delete($cablePlan->floor_plan_path);
         }
 
-        $path = $request->file('floor_plan')->store('floorplans', 'public');
+        $path = $request->file('floor_plan')->store('floorplans', $this->getStorageDisk());
 
         $cablePlan->update([
             'floor_plan_path' => $path,
