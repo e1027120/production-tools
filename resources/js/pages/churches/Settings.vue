@@ -243,7 +243,7 @@ defineOptions({
                                                 :key="mod"
                                                 class="px-2 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-bold uppercase tracking-wider border border-border"
                                             >
-                                                {{ mod === 'racks' ? 'Rack Builder' : (mod === 'shopping_lists' ? 'Shopping Lists' : (mod === 'cables' ? 'Cable Calculator' : (mod === 'assets' ? 'Asset Manager' : mod))) }}
+                                                {{ mod === 'racks' ? 'Rack Builder' : (mod === 'shopping_lists' ? 'Shopping Lists' : (mod === 'cables' ? 'Cable Calculator' : (mod === 'assets' ? 'Asset Manager' : (mod === 'pa_systems' ? 'PA Systems' : mod)))) }}
                                             </span>
                                             <span 
                                                 v-if="member.modules.length === 0" 
@@ -393,10 +393,23 @@ defineOptions({
                                     value="assets" 
                                     v-model="memberForm.modules"
                                     class="size-4.5 rounded border-input text-primary focus:ring-primary cursor-pointer"
-                                />
+                                    />
                                 <Label for="mod-assets" class="cursor-pointer">
                                     <span class="font-semibold text-xs text-foreground block">Asset Manager</span>
                                     <span class="text-[10px] text-muted-foreground block font-normal">Track physical gear, schedule service reminders and maintenance logs.</span>
+                                </Label>
+                            </div>
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/40 border border-border/40">
+                                <input 
+                                    id="mod-pa-systems" 
+                                    type="checkbox" 
+                                    value="pa_systems" 
+                                    v-model="memberForm.modules"
+                                    class="size-4.5 rounded border-input text-primary focus:ring-primary cursor-pointer"
+                                    />
+                                <Label for="mod-pa-systems" class="cursor-pointer">
+                                    <span class="font-semibold text-xs text-foreground block">PA Systems</span>
+                                    <span class="text-[10px] text-muted-foreground block font-normal">Design PA systems, configure speaker zones, and size amplifiers.</span>
                                 </Label>
                             </div>
                         </div>
@@ -520,6 +533,19 @@ defineOptions({
                                 <Label for="edit-mod-assets" class="cursor-pointer">
                                     <span class="font-semibold text-xs text-foreground block">Asset Manager</span>
                                     <span class="text-[10px] text-muted-foreground block font-normal">Track physical gear, schedule service reminders and maintenance logs.</span>
+                                </Label>
+                            </div>
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-muted/40 border border-border/40">
+                                <input 
+                                    id="edit-mod-pa-systems" 
+                                    type="checkbox" 
+                                    value="pa_systems" 
+                                    v-model="editForm.modules"
+                                    class="size-4.5 rounded border-input text-primary focus:ring-primary cursor-pointer"
+                                />
+                                <Label for="edit-mod-pa-systems" class="cursor-pointer">
+                                    <span class="font-semibold text-xs text-foreground block">PA Systems</span>
+                                    <span class="text-[10px] text-muted-foreground block font-normal">Design PA systems, configure speaker zones, and size amplifiers.</span>
                                 </Label>
                             </div>
                         </div>

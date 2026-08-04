@@ -28,7 +28,7 @@ class EnsureUserHasChurch
 
                 $church->users()->attach($user->id, [
                     'role' => 'Admin',
-                    'modules' => ['racks', 'trainings', 'diagrams', 'shopping_lists', 'cables', 'assets'],
+                    'modules' => ['racks', 'trainings', 'diagrams', 'shopping_lists', 'cables', 'assets', 'pa_systems'],
                 ]);
             }
 

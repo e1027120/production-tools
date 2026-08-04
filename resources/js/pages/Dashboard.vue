@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
 import { dashboard } from '@/routes';
-import { Server, Layers, Zap, Sliders, ArrowRight, ShoppingBag, FileText, Share2, DollarSign, GraduationCap, Network, Activity, Ruler, Package } from '@lucide/vue';
+import { Server, Layers, Zap, Sliders, ArrowRight, ShoppingBag, FileText, Share2, DollarSign, GraduationCap, Network, Activity, Ruler, Package, Volume2 } from '@lucide/vue';
 
 defineProps<{
     stats: {
@@ -23,6 +23,8 @@ defineProps<{
         totalAssets: number;
         assetsInMaintenance: number;
         pendingReminders: number;
+        totalPaDesigns: number;
+        totalPaSpeakers: number;
     };
     latestRacks: Array<{
         id: number;
@@ -62,6 +64,12 @@ defineProps<{
         category: string;
         status: string;
     }>;
+    latestPaDesigns: Array<{
+        id: number;
+        name: string;
+        description: string | null;
+        speakers_count: number;
+    }>;
 }>();
 
 const formatCurrency = (val: number) => {
@@ -80,6 +88,7 @@ const hasDiagramsAccess = computed(() => ['Admin', 'Manager'].includes(userRole.
 const hasShoppingAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('shopping_lists'));
 const hasCablesAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('cables'));
 const hasAssetsAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('assets'));
+const hasPaSystemsAccess = computed(() => ['Admin', 'Manager'].includes(userRole.value) || userModules.value.includes('pa_systems'));
 
 defineOptions({
     layout: {
@@ -98,7 +107,7 @@ defineOptions({
 
     <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <!-- Welcoming Empty State if No Modules Active -->
-        <div v-if="!hasRacksAccess && !hasShoppingAccess && !hasTrainingsAccess && !hasDiagramsAccess && !hasCablesAccess && !hasAssetsAccess" class="flex flex-col justify-center items-center text-center p-12 border border-dashed border-border/80 rounded-2xl bg-card min-h-[400px] space-y-4">
+        <div v-if="!hasRacksAccess && !hasShoppingAccess && !hasTrainingsAccess && !hasDiagramsAccess && !hasCablesAccess && !hasAssetsAccess && !hasPaSystemsAccess" class="flex flex-col justify-center items-center text-center p-12 border border-dashed border-border/80 rounded-2xl bg-card min-h-[400px] space-y-4">
             <div class="size-16 rounded-lg bg-muted flex items-center justify-center text-muted-foreground">
                 <Sliders class="size-8 animate-pulse text-[#1AC18C]" />
             </div>
@@ -512,6 +521,79 @@ defineOptions({
 
             <!-- Fallback Placeholder if user lacks asset rights -->
             <div v-else class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border min-h-[320px] overflow-hidden">
+                <PlaceholderPattern />
+            </div>
+        </div>
+
+        <!-- PA Systems Widget Area -->
+        <div v-if="hasPaSystemsAccess" class="grid gap-4 md:grid-cols-3">
+            <!-- PA Systems Widget Card -->
+            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-card p-5 flex flex-col justify-between overflow-hidden group hover:border-[#1AC18C]/40 transition-all duration-300 min-h-[320px]">
+                <!-- Decorative background elements -->
+                <div class="absolute -right-4 -top-4 size-24 rounded-full bg-[#1AC18C]/5 group-hover:scale-125 transition-transform duration-500 blur-xl"></div>
+                
+                <div class="relative space-y-3 flex-1">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <div class="size-8 rounded-lg bg-[#1AC18C]/10 flex items-center justify-center text-[#1AC18C]">
+                                <Volume2 class="size-4.5" />
+                            </div>
+                            <span class="font-bold text-sm tracking-tight text-foreground">PA Systems</span>
+                        </div>
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 uppercase tracking-wider">
+                            Active
+                        </span>
+                    </div>
+
+                    <!-- Stats grid -->
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-2 pt-1 pb-3 border-b border-sidebar-border/30">
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <FileText class="size-3.5 text-muted-foreground shrink-0" />
+                            <span class="text-muted-foreground">Designs:</span>
+                            <span class="font-bold text-foreground">{{ stats.totalPaDesigns }}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <Sliders class="size-3.5 text-muted-foreground shrink-0" />
+                            <span class="text-muted-foreground">Speakers:</span>
+                            <span class="font-bold text-foreground">{{ stats.totalPaSpeakers }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Quick List Table -->
+                    <div class="space-y-2 pt-2">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex justify-between">
+                            <span>Latest Designs</span>
+                            <span>Speakers Count</span>
+                        </div>
+                        <div class="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                            <div v-for="design in latestPaDesigns" :key="design.id" class="flex justify-between items-center text-xs group/item hover:bg-muted/40 p-1.5 rounded-lg transition-colors">
+                                <Link :href="`/pa-systems/${design.id}`" class="font-semibold text-foreground hover:text-[#1AC18C] transition-colors truncate max-w-[150px]" title="Edit PA system design">
+                                    {{ design.name }}
+                                </Link>
+                                <span class="text-[10px] text-muted-foreground font-mono shrink-0">
+                                    {{ design.speakers_count }} speakers
+                                </span>
+                            </div>
+                            <div v-if="latestPaDesigns.length === 0" class="text-[11px] text-muted-foreground italic text-center py-2">
+                                No PA designs configured yet.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="relative pt-4 mt-auto border-t border-sidebar-border/30">
+                    <Link href="/pa-systems" class="w-full inline-flex items-center justify-center rounded-lg bg-[#22273C] dark:bg-muted text-white dark:text-foreground text-xs font-semibold px-4 py-2 hover:bg-[#1AC18C] hover:text-white dark:hover:bg-[#1AC18C] dark:hover:text-white transition-all duration-200 shadow-sm cursor-pointer group/btn">
+                        Open Configurator
+                        <ArrowRight class="ml-1.5 size-3.5 group-hover/btn:translate-x-0.5 transition-transform duration-200" />
+                    </Link>
+                </div>
+            </div>
+            
+            <!-- Placeholders to fill the 3rd row grid columns -->
+            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border min-h-[320px] overflow-hidden">
+                <PlaceholderPattern />
+            </div>
+            <div class="relative rounded-xl border border-sidebar-border/70 dark:border-sidebar-border min-h-[320px] overflow-hidden">
                 <PlaceholderPattern />
             </div>
         </div>

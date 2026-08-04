@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid, Server, Settings, GraduationCap, Network, ShoppingBag, Ruler, Package } from '@lucide/vue';
+import { BookOpen, FolderGit2, LayoutGrid, Server, Settings, GraduationCap, Network, ShoppingBag, Ruler, Package, Volume2 } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -87,6 +87,15 @@ const mainNavItems = computed<NavItem[]>(() => {
                 title: 'Asset Manager',
                 href: '/assets',
                 icon: Package,
+            });
+        }
+
+        const hasPaSystemsAccess = ['Admin', 'Manager'].includes(role) || modules.includes('pa_systems');
+        if (hasPaSystemsAccess) {
+            items.push({
+                title: 'PA Systems',
+                href: '/pa-systems',
+                icon: Volume2,
             });
         }
 

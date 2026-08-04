@@ -6,6 +6,7 @@ use App\Http\Controllers\CatalogDeviceController;
 use App\Http\Controllers\ChurchController;
 use App\Http\Controllers\DiagramController;
 use App\Http\Controllers\DiagramLibraryController;
+use App\Http\Controllers\PaDesignController;
 use App\Http\Controllers\RackController;
 use App\Http\Controllers\ShoppingListController;
 use App\Http\Controllers\TrainingController;
@@ -13,6 +14,7 @@ use App\Models\Asset;
 use App\Models\CablePlan;
 use App\Models\CatalogDevice;
 use App\Models\Diagram;
+use App\Models\PaDesign;
 use App\Models\Rack;
 use App\Models\ServiceReminder;
 use App\Models\ShoppingList;
@@ -152,6 +154,29 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
             ];
         })->values();
 
+        // 7. PA Systems Module
+        $paDesigns = PaDesign::where('church_id', $churchId)->orderBy('id', 'desc')->get();
+        $totalPaDesigns = $paDesigns->count();
+        $totalPaSpeakers = 0;
+        foreach ($paDesigns as $design) {
+            $zones = $design->data['zones'] ?? [];
+            foreach ($zones as $zone) {
+                $totalPaSpeakers += intval($zone['qty'] ?? 0);
+            }
+        }
+        $latestPaDesigns = $paDesigns->take(3)->map(function ($d) {
+            $speakersCount = 0;
+            foreach ($d->data['zones'] ?? [] as $zone) {
+                $speakersCount += intval($zone['qty'] ?? 0);
+            }
+            return [
+                'id' => $d->id,
+                'name' => $d->name,
+                'description' => $d->description,
+                'speakers_count' => $speakersCount,
+            ];
+        })->values();
+
         return Inertia::render('Dashboard', [
             'stats' => [
                 'totalRacks' => $totalRacks,
@@ -170,6 +195,8 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
                 'totalAssets' => $totalAssets,
                 'assetsInMaintenance' => $assetsInMaintenance,
                 'pendingReminders' => $pendingReminders,
+                'totalPaDesigns' => $totalPaDesigns,
+                'totalPaSpeakers' => $totalPaSpeakers,
             ],
             'latestRacks' => $latestRacks,
             'latestShoppingLists' => $latestShoppingLists,
@@ -177,6 +204,7 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
             'latestDiagrams' => $latestDiagrams,
             'latestCablePlans' => $latestCablePlans,
             'latestAssets' => $latestAssets,
+            'latestPaDesigns' => $latestPaDesigns,
         ]);
     })->name('dashboard');
 
@@ -230,6 +258,9 @@ Route::middleware(['auth', 'verified', 'church'])->group(function () {
     Route::post('assets/{asset}/logs', [AssetController::class, 'storeLog'])->name('assets.logs.store');
     Route::post('assets/{asset}/reminders', [AssetController::class, 'storeReminder'])->name('assets.reminders.store');
     Route::post('assets/{asset}/reminders/{reminder}/complete', [AssetController::class, 'completeReminder'])->name('assets.reminders.complete');
+
+    // PA Systems Module
+    Route::resource('pa-systems', PaDesignController::class);
 });
 
 // Public Guest Route for Shared Shopping Lists
